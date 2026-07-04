@@ -1,0 +1,43 @@
+@startuml
+title TicketPlus - Asynchronous Notification Flow (Sequence)
+
+participant "Billing / Checkout\nService" as Billing
+participant "Reservation Engine" as Res
+queue "Message Broker\n(Kafka)" as Broker
+participant "Notification Service" as Notif
+database "Notification Log\n(PostgreSQL)" as Log
+participant "Email Provider" as Email
+participant "SMS Provider" as SMS
+actor Buyer
+
+== Order status changes trigger events ==
+
+Billing -> Broker: publish "order.confirmed"\n{reservationId, userId, ticketId}
+Res -> Broker: publish "reservation.expired"\n{reservationId, userId}
+Billing -> Broker: publish "payment.failed"\n{reservationId, userId, reason}
+
+Broker -> Notif: consume event (partitioned by userId)
+Notif -> Notif: select template by event type
+Notif -> Log: persist notification record (PENDING)
+
+alt event type = order.confirmed
+  Notif -> Email: send ticket email (QR attached)
+  Notif -> SMS: send booking confirmation SMS
+else event type = payment.failed
+  Notif -> Email: send payment failure email
+else event type = reservation.expired
+  Notif -> SMS: send seat-released SMS
+end
+
+alt delivery succeeds
+  Email --> Notif: 200 OK
+  Notif -> Log: update status = SENT
+else delivery fails
+  Email --> Notif: error
+  Notif -> Notif: retry with exponential backoff (max N)
+  Notif -> Log: update status = FAILED after retries exhausted
+end
+
+Notif -> Buyer: push real-time status via WebSocket\n(order status: CONFIRMED / FAILED / EXPIRED)
+
+@enduml

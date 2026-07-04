@@ -1,0 +1,65 @@
+@startuml
+title TicketPlus - Admin/Organizer Event Creation Workflow (Activity)
+
+start
+:Log in as Organizer;
+
+if (Venue already exists?) then (no)
+  :Create venue profile;
+  :Define sectors (VIP, regular, balcony, ...);
+  :Define rows and seat numbers per sector;
+  :Save venue layout;
+else (yes)
+  :Select existing venue;
+endif
+
+:Create new event;
+:Set event metadata\n(title, description, category, artist);
+:Map event to venue + time slot;
+
+:Define pricing model;
+fork
+  :Set base price per sector;
+fork again
+  :Configure dynamic pricing rules\n(demand/time-based multipliers);
+end fork
+
+:Set event status = PLANNED;
+
+if (Ready to publish?) then (no)
+  :Save as draft;
+  stop
+else (yes)
+endif
+
+:Run pre-publish validation\n(pricing completeness, seat map integrity);
+
+if (Validation passed?) then (no)
+  :Show validation errors;
+  stop
+else (yes)
+endif
+
+:Set event status = ON_SALE;
+:Publish event to Event Catalog;
+:Event becomes searchable/bookable;
+
+if (High demand expected?) then (yes)
+  :Enable virtual waiting room for this event;
+else (no)
+endif
+
+:Monitor live sales dashboard;
+
+repeat
+  :Organizer reviews real-time metrics\n(sales, revenue, remaining capacity);
+  if (Adjust pricing or capacity?) then (yes)
+    :Update pricing / seat allocation;
+  endif
+repeat while (Event still on sale?) is (yes)
+->no;
+
+:Set event status = SOLD_OUT or completed;
+stop
+
+@enduml

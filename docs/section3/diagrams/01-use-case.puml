@@ -1,0 +1,81 @@
+@startuml
+title TicketPlus - Use Case Diagram
+
+left to right direction
+skinparam packageStyle rect
+
+actor "Buyer" as Buyer
+actor "Event Organizer" as Organizer
+actor "System Admin" as Admin
+actor "Payment Gateway" as PG <<external>>
+actor "Notification Provider" as NP <<external>>
+
+rectangle "TicketPlus Platform" {
+
+  package "Event Discovery" {
+    usecase "Search events by keyword" as UC1
+    usecase "Filter by genre/date/location" as UC2
+    usecase "View live seat availability" as UC3
+  }
+
+  package "Booking Workflow" {
+    usecase "Enter virtual waiting room" as UC4
+    usecase "View interactive venue map" as UC5
+    usecase "Select seat(s)" as UC6
+    usecase "Lock seat(s) temporarily (TTL)" as UC7
+    usecase "Release expired lock" as UC8
+  }
+
+  package "Checkout & Issuance" {
+    usecase "Checkout / pay for reservation" as UC9
+    usecase "Process payment" as UC10
+    usecase "Issue ticket with QR code" as UC11
+    usecase "Roll back reservation on failure" as UC12
+    usecase "Receive booking notification" as UC13
+  }
+
+  package "Administrative Management" {
+    usecase "Configure venue layout (sectors/rows/seats)" as UC14
+    usecase "Create / schedule event" as UC15
+    usecase "Define pricing model" as UC16
+    usecase "Manage event lifecycle status" as UC17
+    usecase "View sales analytics dashboard" as UC18
+  }
+
+  package "Identity & Access" {
+    usecase "Register / Login" as UC19
+    usecase "Manage role-based permissions" as UC20
+  }
+}
+
+Buyer --> UC1
+Buyer --> UC2
+Buyer --> UC3
+Buyer --> UC4
+Buyer --> UC5
+Buyer --> UC6
+Buyer --> UC9
+Buyer --> UC13
+Buyer --> UC19
+
+UC6 ..> UC7 : <<include>>
+UC7 ..> UC8 : <<extend>>
+UC9 ..> UC10 : <<include>>
+UC10 ..> UC11 : <<include>>
+UC10 ..> UC12 : <<extend>>\n(on failure/timeout)
+
+Organizer --> UC14
+Organizer --> UC15
+Organizer --> UC16
+Organizer --> UC17
+Organizer --> UC18
+Organizer --> UC19
+
+Admin --> UC20
+Admin --> UC19
+Admin --> UC18
+
+UC10 --> PG
+UC13 --> NP
+
+@enduml

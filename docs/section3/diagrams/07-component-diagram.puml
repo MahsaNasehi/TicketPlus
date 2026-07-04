@@ -1,0 +1,75 @@
+@startuml
+title TicketPlus - Component Diagram (Bounded Contexts)
+
+skinparam componentStyle rectangle
+
+actor Buyer
+actor Organizer
+
+package "API Gateway Layer" {
+  [API Gateway\n(routing, authn, rate limiting)] as GW
+}
+
+package "Identity & Access Domain" {
+  [Auth Service\n(JWT/OAuth2, RBAC)] as Auth
+  database "User DB" as UserDB
+}
+
+package "Event Catalog & Discovery Domain" {
+  [Catalog Service\n(search, filtering)] as Catalog
+  database "Catalog DB" as CatalogDB
+  database "Search Cache" as SearchCache
+}
+
+package "Reservation Engine & Inventory Domain" {
+  [Waiting Room Service] as Waiting
+  [Reservation Service\n(seat locking)] as Reservation
+  database "Seat Lock Store\n(Redis)" as RedisLock
+  database "Reservation DB" as ResDB
+}
+
+package "Billing & Checkout Domain" {
+  [Checkout Service\n(Saga orchestrator)] as Checkout
+  database "Payment/Ticket DB" as BillingDB
+}
+
+package "Notification & Messaging Domain" {
+  [Notification Service] as Notif
+  database "Notification Log" as NotifDB
+}
+
+cloud "Message Broker\n(Kafka)" as Broker
+cloud "Payment Gateway\n(external)" as PG
+cloud "Email/SMS Provider\n(external)" as MsgProvider
+
+Buyer --> GW
+Organizer --> GW
+
+GW --> Auth : validate token
+GW --> Catalog : search / browse
+GW --> Waiting : join queue
+GW --> Reservation : lock seats
+GW --> Checkout : submit payment
+
+Auth --> UserDB
+Catalog --> CatalogDB
+Catalog --> SearchCache
+
+Waiting --> Reservation : admit user
+Reservation --> RedisLock
+Reservation --> ResDB
+Reservation --> Broker : publish reservation events
+
+Checkout --> Reservation : confirm / release
+Checkout --> BillingDB
+Checkout --> PG : charge
+Checkout --> Broker : publish order events
+
+Broker --> Notif : consume events
+Notif --> NotifDB
+Notif --> MsgProvider : send email/SMS
+
+Notif ..> Buyer : WebSocket push
+Checkout ..> Buyer : WebSocket push
+
+@enduml

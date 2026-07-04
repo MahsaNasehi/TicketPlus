@@ -1,0 +1,150 @@
+@startuml
+title TicketPlus - Class Diagram
+
+skinparam classAttributeIconSize 0
+
+enum Role {
+  BUYER
+  ORGANIZER
+  ADMIN
+}
+
+enum SeatStatus {
+  AVAILABLE
+  LOCKED
+  BOOKED
+}
+
+enum EventStatus {
+  PLANNED
+  ON_SALE
+  SALE_PAUSED
+  SOLD_OUT
+  CANCELLED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  INITIATED
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+class User {
+  +id: UUID
+  +fullName: string
+  +email: string
+  +phone: string
+  +passwordHash: string
+  +role: Role
+  +createdAt: DateTime
+}
+
+class Organizer {
+  +organizationName: string
+  +verified: boolean
+}
+User <|-- Organizer
+
+class Venue {
+  +id: UUID
+  +name: string
+  +address: string
+  +totalCapacity: int
+}
+
+class Sector {
+  +id: UUID
+  +name: string
+  +priceTier: string
+}
+
+class Row {
+  +id: UUID
+  +label: string
+}
+
+class Seat {
+  +id: UUID
+  +seatNumber: string
+  +status: SeatStatus
+  +x: float
+  +y: float
+}
+
+class Event {
+  +id: UUID
+  +title: string
+  +description: string
+  +category: string
+  +startTime: DateTime
+  +endTime: DateTime
+  +status: EventStatus
+  +organizerId: UUID
+}
+
+class PricingRule {
+  +id: UUID
+  +basePrice: decimal
+  +dynamicMultiplier: float
+  +validFrom: DateTime
+  +validTo: DateTime
+}
+
+class Reservation {
+  +id: UUID
+  +userId: UUID
+  +eventId: UUID
+  +status: ReservationStatus
+  +lockedAt: DateTime
+  +expiresAt: DateTime
+  +idempotencyKey: string
+}
+
+class Payment {
+  +id: UUID
+  +reservationId: UUID
+  +provider: string
+  +providerRefId: string
+  +amount: decimal
+  +status: PaymentStatus
+  +processedAt: DateTime
+}
+
+class Ticket {
+  +id: UUID
+  +reservationId: UUID
+  +qrCodeHash: string
+  +issuedAt: DateTime
+  +checkedIn: boolean
+}
+
+class Notification {
+  +id: UUID
+  +userId: UUID
+  +channel: string
+  +templateType: string
+  +sentAt: DateTime
+}
+
+Venue "1" *-- "many" Sector : contains
+Sector "1" *-- "many" Row : contains
+Row "1" *-- "many" Seat : contains
+Venue "1" -- "many" Event : hosts
+Sector "1" -- "many" PricingRule : priced by
+Event "1" -- "many" Reservation : receives
+User "1" -- "many" Reservation : makes
+Reservation "many" -- "many" Seat : holds
+Reservation "1" -- "0..1" Payment : settled by
+Reservation "1" -- "0..1" Ticket : produces
+User "1" -- "many" Notification : receives
+Organizer "1" -- "many" Event : organizes
+
+@enduml

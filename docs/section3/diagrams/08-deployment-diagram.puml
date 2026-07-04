@@ -1,0 +1,102 @@
+@startuml
+title TicketPlus - Deployment Diagram
+
+skinparam componentStyle rectangle
+
+node "Client Devices" {
+  [Web / Mobile Client]
+}
+
+cloud "CDN / Load Balancer" as CDN
+
+node "Kubernetes Cluster" {
+  node "Ingress" {
+    [NGINX Ingress Controller]
+  }
+
+  node "API Gateway Pods\n(auto-scaled)" as GWPods {
+    [API Gateway]
+  }
+
+  node "Identity Service Pods\n(auto-scaled)" as AuthPods {
+    [Auth Service]
+  }
+
+  node "Catalog Service Pods\n(auto-scaled)" as CatalogPods {
+    [Catalog Service]
+  }
+
+  node "Waiting Room Pods\n(auto-scaled)" as WaitPods {
+    [Waiting Room Service]
+  }
+
+  node "Reservation Service Pods\n(auto-scaled, stateful-aware)" as ResPods {
+    [Reservation Service]
+  }
+
+  node "Checkout Service Pods\n(auto-scaled)" as CheckoutPods {
+    [Checkout Service]
+  }
+
+  node "Notification Worker Pods\n(auto-scaled)" as NotifPods {
+    [Notification Service]
+  }
+}
+
+node "Data Tier" {
+  database "PostgreSQL\n(Primary + Read Replicas)\nusers, events, reservations,\npayments, tickets" as PG
+  database "Redis Cluster\n(seat locks, cache, TTL)" as Redis
+  queue "Kafka Cluster\n(order/notification topics)" as Kafka
+}
+
+node "External Services" {
+  [Payment Gateway]
+  [Email/SMS Provider]
+}
+
+node "Observability Stack" {
+  [Prometheus]
+  [Grafana]
+}
+
+[Web / Mobile Client] --> CDN
+CDN --> [NGINX Ingress Controller]
+[NGINX Ingress Controller] --> GWPods
+
+GWPods --> AuthPods
+GWPods --> CatalogPods
+GWPods --> WaitPods
+GWPods --> ResPods
+GWPods --> CheckoutPods
+
+AuthPods --> PG
+CatalogPods --> PG
+ResPods --> Redis
+ResPods --> PG
+ResPods --> Kafka
+CheckoutPods --> PG
+CheckoutPods --> [Payment Gateway]
+CheckoutPods --> Kafka
+Kafka --> NotifPods
+NotifPods --> [Email/SMS Provider]
+NotifPods --> PG
+
+GWPods ..> [Prometheus] : metrics
+ResPods ..> [Prometheus] : metrics
+CheckoutPods ..> [Prometheus] : metrics
+[Prometheus] --> [Grafana]
+
+note right of ResPods
+  Horizontal Pod Autoscaler
+  scales on CPU + queue depth
+  during ticket-release spikes
+end note
+
+note right of Redis
+  Sentinel/Cluster mode for
+  HA; fallback to DB-level
+  advisory locks if Redis
+  becomes unavailable
+end note
+
+@enduml

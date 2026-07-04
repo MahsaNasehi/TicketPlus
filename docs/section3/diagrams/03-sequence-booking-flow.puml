@@ -1,0 +1,78 @@
+@startuml
+title TicketPlus - End-to-End Booking Flow (Sequence)
+
+actor Buyer
+participant "API Gateway" as GW
+participant "Waiting Room\nQueue Service" as Queue
+participant "Event Catalog\nService" as Catalog
+participant "Reservation Engine" as Res
+database "Redis\n(seat locks)" as Redis
+participant "Billing / Checkout\nService" as Billing
+participant "Payment Gateway" as PG
+database "PostgreSQL" as DB
+participant "Notification Service" as Notif
+queue "Message Broker\n(Kafka)" as Broker
+
+Buyer -> GW: GET /events/{id}
+GW -> Catalog: fetch event + seat map
+Catalog --> GW: event details
+GW --> Buyer: render venue map
+
+alt high-demand event
+  Buyer -> GW: join waiting room
+  GW -> Queue: enqueue(userId, eventId)
+  Queue --> Buyer: queue position (via WebSocket)
+  Queue -> GW: admit user when slot free
+end
+
+Buyer -> GW: select seat(s)
+GW -> Res: POST /reservations {seats, userId}
+Res -> Redis: SET lock:seat:{id} NX EX=600
+alt lock acquired
+  Redis --> Res: OK
+  Res -> DB: insert Reservation(PENDING, expiresAt)
+  Res --> GW: reservation created
+  GW --> Buyer: seats locked, checkout timer started
+else lock already held
+  Redis --> Res: nil
+  Res --> GW: 409 Conflict
+  GW --> Buyer: seat unavailable, pick another
+end
+
+Buyer -> GW: submit payment details
+GW -> Billing: POST /checkout {reservationId, idempotencyKey}
+Billing -> DB: verify Reservation is PENDING and not expired
+Billing -> PG: charge(amount, idempotencyKey)
+
+alt payment succeeds
+  PG --> Billing: success + providerRefId
+  Billing -> DB: insert Payment(SUCCEEDED)
+  Billing -> Res: confirm reservation
+  Res -> DB: update Reservation(CONFIRMED)
+  Res -> Redis: DEL lock:seat:{id}
+  Res -> DB: update Seat.status = BOOKED
+  Billing -> DB: insert Ticket(qrCodeHash)
+  Billing -> Broker: publish OrderConfirmed event
+  Broker -> Notif: consume OrderConfirmed
+  Notif --> Buyer: email/SMS with ticket + QR
+  Billing --> GW: 200 OK + ticket
+  GW --> Buyer: booking confirmed (WebSocket push)
+else payment fails or gateway times out
+  PG --> Billing: failure / timeout
+  Billing -> Res: trigger compensation (Saga rollback)
+  Res -> DB: update Reservation(CANCELLED)
+  Res -> Redis: DEL lock:seat:{id}
+  Res -> DB: update Seat.status = AVAILABLE
+  Billing -> Broker: publish PaymentFailed event
+  Broker -> Notif: consume PaymentFailed
+  Notif --> Buyer: payment failed notification
+  Billing --> GW: 402 Payment Required
+  GW --> Buyer: show retry option
+end
+
+== TTL expiry (no payment submitted) ==
+Res -> Redis: key expires (TTL reached)
+Redis --> Res: keyspace notification
+Res -> DB: update Reservation(EXPIRED), Seat.status = AVAILABLE
+
+@enduml

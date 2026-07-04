@@ -1,0 +1,52 @@
+@startuml
+title TicketPlus - User Purchase Journey (Activity)
+
+start
+:Browse / search events;
+:Select event;
+
+if (High-demand event?) then (yes)
+  :Enter virtual waiting room;
+  :Wait for queue slot;
+  :Get admitted to seat map;
+else (no)
+endif
+
+:View live seat map;
+
+while (Booking not completed and not abandoned?) is (retry)
+  :Select seat(s);
+
+  if (Seat available?) then (no)
+    :Show "seat unavailable" message;
+  else (yes)
+    :Request temporary lock (TTL);
+    :Lock acquired, checkout timer starts;
+    :Fill payment details;
+
+    if (Submitted before timer expiry?) then (no)
+      :Lock expires, seat auto-released;
+      :Notify user seat was released;
+    else (yes)
+      :Submit checkout request;
+      if (Payment authorized?) then (yes)
+        :Reservation confirmed;
+        :Ticket + QR code generated;
+        :Confirmation email/SMS sent;
+        :Show success screen;
+        break
+      else (no)
+        :Release seat lock;
+        :Show retry / choose new seat option;
+        if (User wants to retry?) then (no)
+          :Abandon booking;
+          break
+        endif
+      endif
+    endif
+  endif
+endwhile (done)
+
+stop
+
+@enduml
