@@ -60,20 +60,26 @@ class Handler(BaseHTTPRequestHandler):
             path = urlparse(self.path).path
             body = self._body()
             if path == "/reservations":
+                idempotency_key = self.headers.get("Idempotency-Key", "")
+                if len(idempotency_key) < 8:
+                    raise ValueError("Idempotency-Key must contain at least 8 characters")
                 result = reservations.lock_seats(
                     body["userId"],
                     body["eventId"],
                     body["seatIds"],
-                    self.headers.get("Idempotency-Key", ""),
+                    idempotency_key,
                 )
                 self._json(HTTPStatus.CREATED, result)
                 return
             if path == "/checkouts":
+                idempotency_key = self.headers.get("Idempotency-Key", "")
+                if len(idempotency_key) < 8:
+                    raise ValueError("Idempotency-Key must contain at least 8 characters")
                 result = checkout.checkout(
                     body["reservationId"],
                     body["amountMinor"],
                     body["currency"],
-                    self.headers.get("Idempotency-Key", ""),
+                    idempotency_key,
                 )
                 self._json(HTTPStatus.OK, asdict(result))
                 return
@@ -96,4 +102,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

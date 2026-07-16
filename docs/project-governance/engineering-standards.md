@@ -9,6 +9,9 @@
 - `docs/quality/` defines verification and release gates.
 - `infra/terraform/` provisions cloud infrastructure.
 - `quality/load/` contains executable performance scenarios.
+- `src/ticketplus/` contains the dependency-free executable reference workflow.
+- `contracts/` contains OpenAPI and versioned event schemas.
+- `db/migrations/` contains the production PostgreSQL schema and demo seed data.
 - Future service directories own their source, tests, migrations, API/event
   schemas, container definition, and runbook.
 
@@ -58,11 +61,13 @@ implementation adds a Compose file with health checks and seeded synthetic data
 for PostgreSQL, Redis, Kafka, and services. No setup step may depend on an
 unrecorded manual database edit or developer-specific path.
 
-The current repository is an architecture and operations deliverable rather
-than a service implementation. Therefore it does not claim a runnable local
-application. The Terraform layer is documented in
-[`../../infra/terraform/README.md`](../../infra/terraform/README.md), and CI
-validates all committed executable artifacts.
+The dependency-free reference API runs in one container for local verification,
+while its Python modules preserve Reservation, Checkout, Ticketing,
+Notification, and event-bus ownership. The production diagrams retain separate
+deployable services and managed PostgreSQL, Redis, and Kafka. The
+`production-parity` Compose profile starts those dependencies for adapter work.
+The Terraform layer is documented in
+[`../../infra/terraform/README.md`](../../infra/terraform/README.md).
 
 ## Documentation Standard
 
@@ -70,4 +75,3 @@ Documentation states owner, assumptions, decisions, failure behavior, and
 verification where relevant. Diagrams and prose use consistent domain names.
 Links are relative, examples contain no secrets, and meaningful behavior changes
 update their diagrams/runbooks in the same merge request.
-

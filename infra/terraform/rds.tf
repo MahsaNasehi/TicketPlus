@@ -36,17 +36,17 @@ resource "aws_db_instance" "main" {
   storage_type          = "gp3"
   storage_encrypted     = true
 
-  db_name  = "ticketplus"
-  username = "ticketplus_admin"
+  db_name                     = "ticketplus"
+  username                    = "ticketplus_admin"
   manage_master_user_password = true
 
   multi_az               = var.db_multi_az
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  backup_retention_period = 7
-  deletion_protection     = true
-  skip_final_snapshot     = false
+  backup_retention_period   = 7
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name}-postgres-final"
 }
 
@@ -54,6 +54,6 @@ resource "aws_db_instance" "read_replica" {
   identifier          = "${local.name}-postgres-replica"
   replicate_source_db = aws_db_instance.main.identifier
   instance_class      = var.db_instance_class
-  publicly_accessible  = false
-  skip_final_snapshot  = true
+  publicly_accessible = false
+  skip_final_snapshot = true
 }

@@ -12,7 +12,7 @@ export const options = {
   scenarios: {
     hot_seat: {
       executor: "per-vu-iterations",
-      vus: Number(__ENV.VUS || 1000),
+      vus: Number(__ENV.VUS || 5000),
       iterations: 1,
       maxDuration: "2m",
     },
@@ -38,7 +38,7 @@ export default function () {
   const idempotencyKey = `load-${exec.scenario.iterationInTest}-${exec.vu.idInTest}`;
   const response = http.post(
     `${baseUrl}/reservations`,
-    JSON.stringify({ eventId, seatIds: [seatId] }),
+    JSON.stringify({ userId: `load-buyer-${exec.vu.idInTest}`, eventId, seatIds: [seatId] }),
     {
       headers: {
         "Content-Type": "application/json",

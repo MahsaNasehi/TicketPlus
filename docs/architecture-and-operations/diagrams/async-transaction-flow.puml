@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - Asynchronous Transaction Outcome Flow
 autonumber
 

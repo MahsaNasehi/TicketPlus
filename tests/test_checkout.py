@@ -49,7 +49,13 @@ class CheckoutTests(unittest.TestCase):
         service.checkout(reservation["id"], 10000, "IRR", "payment-key")
         self.assertEqual("PENDING", self.reservations.get(reservation["id"])["status"])
 
+    def test_ticket_issuance_is_idempotent_across_duplicate_business_events(self):
+        payload = {"reservationId": "reservation-1", "amountMinor": 10000, "currency": "IRR"}
+        self.bus.publish("PaymentSucceeded", "order-1", payload, event_id="event-1")
+        original_ticket = self.ticketing.tickets["reservation-1"]
+        self.bus.publish("PaymentSucceeded", "order-1", payload, event_id="event-2")
+        self.assertEqual(original_ticket, self.ticketing.tickets["reservation-1"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

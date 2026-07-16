@@ -14,6 +14,9 @@ quality assurance, and production incident handling.
 | Production architecture and incidents | [`docs/architecture-and-operations/`](docs/architecture-and-operations/) |
 | QA, load, mutation, and coverage policy | [`docs/quality/`](docs/quality/) |
 | Executable load scenarios | [`quality/load/`](quality/load/) |
+| Reference application | [`src/ticketplus/`](src/ticketplus/) |
+| API and event contracts | [`contracts/`](contracts/) |
+| Database migrations | [`db/migrations/`](db/migrations/) |
 | Team roles and engineering standards | [`docs/project-governance/`](docs/project-governance/) |
 | Terraform infrastructure | [`infra/terraform/`](infra/terraform/) |
 | Contribution and review workflow | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
@@ -34,3 +37,34 @@ Terraform commands and deployment boundaries are documented in
 [`infra/terraform/README.md`](infra/terraform/README.md). Do not run
 `terraform apply` without an approved AWS account and cost review.
 
+## Run Locally
+
+The default Compose environment runs the dependency-free reference API with a
+persistent SQLite database:
+
+```bash
+docker compose up --build
+curl http://localhost:8080/health/ready
+```
+
+Start PostgreSQL, Redis, and Kafka alongside it when working on production
+adapters:
+
+```bash
+docker compose --profile production-parity up --build
+```
+
+Run the critical workflow tests, coverage gate, and mutation suite without
+installing third-party Python packages:
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+python3 quality/coverage/run.py
+python3 quality/mutation/run.py
+```
+
+The OpenAPI contract is at
+[`contracts/openapi/ticketplus.yaml`](contracts/openapi/ticketplus.yaml). The
+local API implements health, seat locking, checkout, reservation lookup, and
+ticket lookup. Production deployment separates the bounded contexts shown in
+the component and deployment diagrams.

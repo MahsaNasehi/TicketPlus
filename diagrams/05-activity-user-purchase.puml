@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - User Purchase Journey (Activity)
 
 start

@@ -26,9 +26,6 @@ class PaymentAttempt:
     provider_reference: str | None
 
 
-Gateway = callable
-
-
 class CheckoutService:
     def __init__(self, reservations: ReservationService, bus: EventBus, gateway) -> None:
         self.reservations = reservations
@@ -105,4 +102,3 @@ class NotificationService:
 
     def _record(self, event: DomainEvent) -> None:
         self.deliveries.append({"eventId": event.event_id, "type": event.event_type})
-

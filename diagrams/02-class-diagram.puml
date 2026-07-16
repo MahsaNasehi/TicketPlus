@@ -1,4 +1,5 @@
 @startuml
+!pragma layout elk
 title TicketPlus - Class Diagram
 
 skinparam classAttributeIconSize 0

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.db
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.terraform/
+*.tfstate
+*.tfstate.*
+reports/coverage/*.cover
+submission/
+.env

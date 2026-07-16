@@ -53,3 +53,8 @@ Equivalent mutants may be excluded only with a code reference and reviewer
 approval. The release record includes tool version, score by module, thresholds,
 and all approved exclusions.
 
+The dependency-free reference implementation enforces statement coverage for
+`reservation.py`, `checkout.py`, and `events.py` through
+`quality/coverage/run.py`. Its critical mutation smoke suite is implemented in
+`quality/mutation/run.py`. Both generate JSON evidence under `reports/` and fail
+CI below the configured thresholds.

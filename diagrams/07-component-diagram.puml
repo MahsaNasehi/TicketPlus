@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - Component Diagram (Bounded Contexts)
 
 skinparam componentStyle rectangle

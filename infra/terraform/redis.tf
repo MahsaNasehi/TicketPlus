@@ -28,7 +28,7 @@ resource "aws_security_group" "redis" {
 # advisory locks (see Risk Analysis document, section on Redis fallback).
 resource "aws_elasticache_replication_group" "main" {
   replication_group_id = "${local.name}-redis"
-  description           = "TicketPlus seat-lock and cache store"
+  description          = "TicketPlus seat-lock and cache store"
 
   engine         = "redis"
   engine_version = "7.1"
@@ -40,7 +40,7 @@ resource "aws_elasticache_replication_group" "main" {
   automatic_failover_enabled = true
   multi_az_enabled           = true
 
-  subnet_group_name = aws_elasticache_subnet_group.main.name
+  subnet_group_name  = aws_elasticache_subnet_group.main.name
   security_group_ids = [aws_security_group.redis.id]
 
   at_rest_encryption_enabled = true

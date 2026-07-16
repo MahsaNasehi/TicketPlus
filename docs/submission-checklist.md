@@ -17,6 +17,12 @@
 | Component source/export | `diagrams/07-component-diagram.puml`, `rendered/07-component-diagram.svg` | Present |
 | Deployment source/export | `diagrams/08-deployment-diagram.puml`, `rendered/08-deployment-diagram.svg` | Present |
 | Terraform infrastructure | `infra/terraform/` | Present |
+| Executable reference application | `src/ticketplus/`, `Dockerfile`, `compose.yaml` | Present |
+| PostgreSQL migrations and seed data | `db/migrations/` | Present |
+| API and event contracts | `contracts/` | Present |
+| Unit and concurrency tests | `tests/` | Present; 9 pass locally, 1 HTTP class skipped by sandbox socket policy |
+| Coverage evidence | `reports/coverage/summary.json` | Present; 93.1% critical-module statement coverage |
+| Mutation evidence | `reports/mutation/summary.json` | Present; 6/6 targeted mutations killed |
 | QA and verification strategy | `docs/quality/` | Present |
 | Executable contention test | `quality/load/hot-seat-contention.js` | Present; requires a test environment |
 | GitLab pipeline | `.gitlab-ci.yml` | Present |
@@ -28,11 +34,13 @@
 
 - [ ] Insert the final Product Vision and Risk Analysis files.
 - [ ] Export Jira backlog, hierarchy, sprint reports, and burndown charts.
-- [ ] Render all PlantUML sources and inspect text/layout at submission scale.
+- [x] Render all PlantUML sources as SVG.
 - [ ] Export diagrams as vector PDF if required by the instructor; SVG sources
       are currently included.
 - [ ] Run the GitLab pipeline on the final commit and retain its reports.
-- [ ] Confirm Terraform formats and validates without applying billable resources.
+- [x] Confirm Terraform formatting without applying billable resources.
+- [ ] Retain a successful provider-backed `terraform validate` result from GitLab
+      CI; the local registry endpoint did not expose the provider protocol.
 - [ ] Remove credentials, local state, caches, personal data, and temporary files.
 - [ ] Verify every document link and submission filename on a clean checkout.
 - [ ] Record the commit SHA used for the presentation and archive.
@@ -44,4 +52,3 @@
 The tag pipeline creates `ticketplus-<tag>.zip` while excluding Git metadata and
 Terraform state. Add the team-supplied baseline documents and Jira exports before
 creating the final tag so the generated archive is complete.
-

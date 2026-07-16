@@ -32,6 +32,10 @@ class ReservationTests(unittest.TestCase):
         second = self.service.lock_seats("buyer", "event", ["A-1"], "same-key")
         self.assertEqual(first["id"], second["id"])
 
+    def test_duplicate_seat_in_request_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.service.lock_seats("buyer", "event", ["A-1", "A-1"], "duplicate")
+
     def test_expiry_releases_seat(self):
         now = datetime.now(UTC)
         original = self.service.lock_seats("buyer", "event", ["A-1"], "old", now=now)
@@ -42,7 +46,13 @@ class ReservationTests(unittest.TestCase):
         )
         self.assertEqual("PENDING", replacement["status"])
 
+    def test_confirmation_at_expiry_boundary_is_rejected(self):
+        now = datetime.now(UTC)
+        reservation = self.service.lock_seats("buyer", "event", ["A-1"], "boundary", now=now)
+        with self.assertRaises(Exception):
+            self.service.confirm(reservation["id"], now=now + timedelta(seconds=10))
+        self.assertEqual("EXPIRED", self.service.get(reservation["id"])["status"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

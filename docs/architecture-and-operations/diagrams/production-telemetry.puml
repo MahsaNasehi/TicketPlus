@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - Kubernetes Telemetry and Canary Architecture
 skinparam componentStyle rectangle
 left to right direction

@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - Deployment Diagram
 
 skinparam componentStyle rectangle

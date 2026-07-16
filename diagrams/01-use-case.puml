@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - Use Case Diagram
 
 left to right direction

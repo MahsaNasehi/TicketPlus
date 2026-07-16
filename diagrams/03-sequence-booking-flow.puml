@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - End-to-End Booking Flow (Sequence)
 
 actor Buyer

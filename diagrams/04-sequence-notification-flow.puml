@@ -1,4 +1,5 @@
 @startuml
+!pragma layout smetana
 title TicketPlus - Asynchronous Notification Flow (Sequence)
 
 participant "Billing / Checkout\nService" as Billing
