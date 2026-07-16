@@ -1,0 +1,48 @@
+    1: import tempfile
+    1: import unittest
+    1: from concurrent.futures import ThreadPoolExecutor
+    1: from datetime import UTC, datetime, timedelta
+    1: from pathlib import Path
+       
+    1: from ticketplus.events import EventBus
+    1: from ticketplus.reservation import LockConflict, ReservationService
+       
+       
+    2: class ReservationTests(unittest.TestCase):
+    1:     def setUp(self):
+    3:         self.temp = tempfile.TemporaryDirectory()
+    3:         self.service = ReservationService(Path(self.temp.name) / "test.db", EventBus(), ttl_seconds=10)
+       
+    1:     def tearDown(self):
+    3:         self.temp.cleanup()
+       
+    1:     def test_exactly_one_concurrent_lock_winner(self):
+    1:         def attempt(number):
+  200:             try:
+  200:                 return self.service.lock_seats("buyer", "event", ["A-1"], f"key-{number}")["id"]
+  199:             except LockConflict:
+  199:                 return None
+       
+    2:         with ThreadPoolExecutor(max_workers=32) as pool:
+    1:             results = list(pool.map(attempt, range(200)))
+  201:         self.assertEqual(1, len([result for result in results if result]))
+       
+    1:     def test_idempotent_retry_returns_same_reservation(self):
+    1:         first = self.service.lock_seats("buyer", "event", ["A-1"], "same-key")
+    1:         second = self.service.lock_seats("buyer", "event", ["A-1"], "same-key")
+    1:         self.assertEqual(first["id"], second["id"])
+       
+    1:     def test_expiry_releases_seat(self):
+    1:         now = datetime.now(UTC)
+    1:         original = self.service.lock_seats("buyer", "event", ["A-1"], "old", now=now)
+    1:         self.assertEqual(1, self.service.expire_due(now=now + timedelta(seconds=11)))
+    1:         self.assertEqual("EXPIRED", self.service.get(original["id"])["status"])
+    2:         replacement = self.service.lock_seats(
+    1:             "other", "event", ["A-1"], "new", now=now + timedelta(seconds=11)
+               )
+    1:         self.assertEqual("PENDING", replacement["status"])
+       
+       
+    1: if __name__ == "__main__":
+           unittest.main()
+       

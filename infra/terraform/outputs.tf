@@ -20,6 +20,20 @@ output "redis_primary_endpoint" {
   value = aws_elasticache_replication_group.main.primary_endpoint_address
 }
 
+output "kafka_tls_bootstrap_brokers" {
+  value     = aws_msk_cluster.main.bootstrap_brokers_tls
+  sensitive = true
+}
+
+output "public_load_balancer_dns_name" {
+  value = aws_lb.public.dns_name
+}
+
+output "ingress_target_group_arn" {
+  description = "Target group used when registering Kubernetes ingress endpoints"
+  value       = aws_lb_target_group.ingress.arn
+}
+
 output "vpc_id" {
   value = aws_vpc.main.id
 }

@@ -1,0 +1,46 @@
+@startuml
+title TicketPlus - DDD Bounded Context Map
+left to right direction
+skinparam componentStyle rectangle
+
+actor Buyer
+actor Organizer
+
+component "API Gateway" as Gateway
+component "Identity & Access\n[Identity]" as Identity
+component "Catalog & Discovery\n[Upstream metadata owner]" as Catalog
+component "Waiting Room\n[Admission control]" as Waiting
+component "Reservation & Inventory\n[Availability owner]" as Reservation
+component "Billing & Checkout\n[Saga coordinator]" as Checkout
+component "Ticketing\n[Ticket lifecycle]" as Ticketing
+component "Notification\n[Delivery]" as Notification
+queue "Kafka\nVersioned domain events" as Kafka
+
+Buyer --> Gateway
+Organizer --> Gateway
+Gateway --> Identity : token validation
+Gateway --> Catalog : event queries
+Gateway --> Waiting : admission
+Gateway --> Reservation : seat map / lock
+Gateway --> Checkout : checkout
+
+Catalog --> Kafka : EventPublished
+Waiting --> Reservation : admitted lock request
+Reservation --> Kafka : InventoryChanged\nReservationExpired
+Checkout --> Reservation : Confirm / Release
+Checkout --> Kafka : PaymentSucceeded\nPaymentFailed
+Kafka --> Catalog : inventory projection
+Kafka --> Ticketing : issue ticket
+Kafka --> Notification : send status message
+
+note bottom of Catalog
+  Never writes live availability.
+  Search counts are projections.
+end note
+
+note bottom of Reservation
+  Sole authority for AVAILABLE,
+  LOCKED, and BOOKED transitions.
+end note
+@enduml
+

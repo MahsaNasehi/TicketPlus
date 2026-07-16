@@ -1,0 +1,140 @@
+openapi: 3.1.0
+info:
+  title: TicketPlus Reference API
+  version: 0.1.0
+  description: Concurrency-safe reservation and checkout reference contract.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health/ready:
+    get:
+      operationId: readiness
+      responses:
+        "200":
+          description: Service is ready.
+  /reservations:
+    post:
+      operationId: lockSeats
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReservation"
+      responses:
+        "201":
+          description: Seats locked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "409":
+          description: At least one seat is unavailable.
+  /reservations/{reservationId}:
+    get:
+      operationId: getReservation
+      parameters:
+        - $ref: "#/components/parameters/ReservationId"
+      responses:
+        "200":
+          description: Current reservation state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "404":
+          description: Reservation not found.
+  /checkouts:
+    post:
+      operationId: checkout
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "200":
+          description: Durable payment attempt result.
+  /tickets/by-reservation/{reservationId}:
+    get:
+      operationId: getTicketByReservation
+      parameters:
+        - $ref: "#/components/parameters/ReservationId"
+      responses:
+        "200":
+          description: Issued ticket.
+        "404":
+          description: Ticket has not been issued.
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    ReservationId:
+      name: reservationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CreateReservation:
+      type: object
+      required: [userId, eventId, seatIds]
+      additionalProperties: false
+      properties:
+        userId:
+          type: string
+        eventId:
+          type: string
+        seatIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+    Reservation:
+      type: object
+      required: [id, userId, eventId, seatIds, status, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        eventId:
+          type: string
+        seatIds:
+          type: array
+          items:
+            type: string
+        status:
+          enum: [PENDING, CONFIRMED, EXPIRED, CANCELLED]
+        expiresAt:
+          type: string
+          format: date-time
+    CheckoutRequest:
+      type: object
+      required: [reservationId, amountMinor, currency]
+      additionalProperties: false
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        amountMinor:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+

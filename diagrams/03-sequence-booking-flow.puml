@@ -11,6 +11,7 @@ participant "Billing / Checkout\nService" as Billing
 participant "Payment Gateway" as PG
 database "PostgreSQL" as DB
 participant "Notification Service" as Notif
+participant "Ticketing Service" as Ticketing
 queue "Message Broker\n(Kafka)" as Broker
 
 Buyer -> GW: GET /events/{id}
@@ -51,11 +52,13 @@ alt payment succeeds
   Res -> DB: update Reservation(CONFIRMED)
   Res -> Redis: DEL lock:seat:{id}
   Res -> DB: update Seat.status = BOOKED
-  Billing -> DB: insert Ticket(qrCodeHash)
-  Billing -> Broker: publish OrderConfirmed event
-  Broker -> Notif: consume OrderConfirmed
+  Billing -> Broker: publish PaymentSucceeded event
+  Broker -> Ticketing: consume PaymentSucceeded
+  Ticketing -> DB: insert Ticket(qrCodeHash)
+  Ticketing -> Broker: publish TicketIssued event
+  Broker -> Notif: consume TicketIssued
   Notif --> Buyer: email/SMS with ticket + QR
-  Billing --> GW: 200 OK + ticket
+  Billing --> GW: 200 OK + confirmed order
   GW --> Buyer: booking confirmed (WebSocket push)
 else payment fails or gateway times out
   PG --> Billing: failure / timeout

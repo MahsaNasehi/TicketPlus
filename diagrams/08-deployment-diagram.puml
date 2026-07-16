@@ -38,6 +38,10 @@ node "Kubernetes Cluster" {
     [Checkout Service]
   }
 
+  node "Ticketing Service Pods\n(auto-scaled)" as TicketPods {
+    [Ticketing Service]
+  }
+
   node "Notification Worker Pods\n(auto-scaled)" as NotifPods {
     [Notification Service]
   }
@@ -77,6 +81,9 @@ ResPods --> Kafka
 CheckoutPods --> PG
 CheckoutPods --> [Payment Gateway]
 CheckoutPods --> Kafka
+Kafka --> TicketPods
+TicketPods --> PG
+TicketPods --> Kafka
 Kafka --> NotifPods
 NotifPods --> [Email/SMS Provider]
 NotifPods --> PG

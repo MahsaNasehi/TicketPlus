@@ -1,0 +1,44 @@
+@startuml
+title TicketPlus - Asynchronous Transaction Outcome Flow
+autonumber
+
+participant Buyer
+participant "Checkout Service" as Checkout
+database "Checkout DB + Outbox" as DB
+participant "Outbox Relay" as Relay
+queue "Kafka" as Kafka
+participant "Ticketing Consumer" as Ticketing
+database "Ticket DB" as TicketDB
+participant "Notification Consumer" as Notification
+participant "Email/SMS Provider" as Provider
+queue "Notification DLQ" as DLQ
+
+Buyer -> Checkout : complete checkout
+Checkout -> Checkout : authorize payment
+Checkout -> DB : atomic write(PAID, PaymentSucceeded outbox)
+DB --> Checkout : committed
+Checkout --> Buyer : payment accepted / orderId
+
+Relay -> DB : poll unpublished outbox rows
+Relay -> Kafka : PaymentSucceeded(eventId, orderId)
+Relay -> DB : mark published
+
+Kafka -> Ticketing : PaymentSucceeded
+Ticketing -> TicketDB : insert ticket if eventId unseen
+Ticketing -> Kafka : TicketIssued(ticketId)
+
+Kafka -> Notification : PaymentSucceeded / TicketIssued
+Notification -> Provider : send confirmation
+alt provider succeeds
+  Provider --> Notification : accepted
+  Notification -> Notification : record delivered eventId
+else transient provider failure
+  Provider --> Notification : timeout / 5xx
+  loop maximum 5 attempts
+    Notification -> Provider : retry with backoff + jitter
+  end
+  Notification -> DLQ : original event + failure metadata
+  Notification -> Notification : emit delivery alert
+end
+@enduml
+

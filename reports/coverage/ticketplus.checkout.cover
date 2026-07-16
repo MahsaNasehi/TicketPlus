@@ -1,0 +1,108 @@
+    1: """Idempotent checkout saga and compensation behavior."""
+       
+    1: from dataclasses import dataclass
+    1: from enum import StrEnum
+    1: from threading import RLock
+    1: from uuid import uuid4
+       
+    1: from .events import DomainEvent, EventBus
+    1: from .reservation import ReservationService
+       
+       
+    2: class PaymentResult(StrEnum):
+    1:     SUCCEEDED = "SUCCEEDED"
+    1:     FAILED = "FAILED"
+    1:     UNKNOWN = "UNKNOWN"
+       
+       
+    3: @dataclass(frozen=True)
+    2: class PaymentAttempt:
+    1:     order_id: str
+    1:     reservation_id: str
+    1:     idempotency_key: str
+    1:     amount_minor: int
+    1:     currency: str
+    1:     status: PaymentResult
+    1:     provider_reference: str | None
+       
+       
+    1: Gateway = callable
+       
+       
+    2: class CheckoutService:
+    1:     def __init__(self, reservations: ReservationService, bus: EventBus, gateway) -> None:
+    3:         self.reservations = reservations
+    3:         self.bus = bus
+    3:         self.gateway = gateway
+    3:         self._attempts: dict[str, PaymentAttempt] = {}
+    3:         self._lock = RLock()
+       
+    6:     def checkout(
+               self,
+    1:         reservation_id: str,
+    1:         amount_minor: int,
+    1:         currency: str,
+    1:         idempotency_key: str,
+    1:     ) -> PaymentAttempt:
+    4:         if amount_minor <= 0 or len(currency) != 3:
+                   raise ValueError("a positive amount and ISO currency are required")
+    8:         with self._lock:
+    4:             if idempotency_key in self._attempts:
+    1:                 return self._attempts[idempotency_key]
+    3:             result, provider_reference = self.gateway(idempotency_key, amount_minor, currency)
+    6:             attempt = PaymentAttempt(
+    3:                 order_id=str(uuid4()),
+    3:                 reservation_id=reservation_id,
+    3:                 idempotency_key=idempotency_key,
+    3:                 amount_minor=amount_minor,
+    3:                 currency=currency.upper(),
+    3:                 status=PaymentResult(result),
+    3:                 provider_reference=provider_reference,
+                   )
+    3:             self._attempts[idempotency_key] = attempt
+       
+    3:             if attempt.status is PaymentResult.SUCCEEDED:
+    1:                 self.reservations.confirm(reservation_id)
+    2:                 self.bus.publish(
+    1:                     "PaymentSucceeded",
+    1:                     attempt.order_id,
+    1:                     {"reservationId": reservation_id, "amountMinor": amount_minor, "currency": currency},
+                       )
+    2:             elif attempt.status is PaymentResult.FAILED:
+    1:                 self.reservations.release(reservation_id, "payment_failed")
+    2:                 self.bus.publish(
+    1:                     "PaymentFailed", attempt.order_id, {"reservationId": reservation_id}
+                       )
+                   else:
+    2:                 self.bus.publish(
+    1:                     "PaymentPendingReconciliation",
+    1:                     attempt.order_id,
+    1:                     {"reservationId": reservation_id},
+                       )
+    3:             return attempt
+       
+       
+    2: class TicketingService:
+    1:     def __init__(self, bus: EventBus) -> None:
+    3:         self.tickets: dict[str, dict[str, str]] = {}
+    3:         self.bus = bus
+    3:         bus.subscribe("PaymentSucceeded", self._issue)
+       
+    1:     def _issue(self, event: DomainEvent) -> None:
+    1:         reservation_id = str(event.payload["reservationId"])
+    1:         if reservation_id in self.tickets:
+                   return
+    1:         ticket = {"id": str(uuid4()), "reservationId": reservation_id, "qrHash": str(uuid4())}
+    1:         self.tickets[reservation_id] = ticket
+    1:         self.bus.publish("TicketIssued", ticket["id"], ticket)
+       
+       
+    2: class NotificationService:
+    1:     def __init__(self, bus: EventBus) -> None:
+    3:         self.deliveries: list[dict[str, str]] = []
+    3:         bus.subscribe("TicketIssued", self._record)
+    3:         bus.subscribe("PaymentFailed", self._record)
+       
+    1:     def _record(self, event: DomainEvent) -> None:
+    2:         self.deliveries.append({"eventId": event.event_id, "type": event.event_type})
+       

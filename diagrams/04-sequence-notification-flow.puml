@@ -3,6 +3,7 @@ title TicketPlus - Asynchronous Notification Flow (Sequence)
 
 participant "Billing / Checkout\nService" as Billing
 participant "Reservation Engine" as Res
+participant "Ticketing Service" as Ticketing
 queue "Message Broker\n(Kafka)" as Broker
 participant "Notification Service" as Notif
 database "Notification Log\n(PostgreSQL)" as Log
@@ -12,7 +13,9 @@ actor Buyer
 
 == Order status changes trigger events ==
 
-Billing -> Broker: publish "order.confirmed"\n{reservationId, userId, ticketId}
+Billing -> Broker: publish "payment.succeeded"\n{reservationId, userId, orderId}
+Broker -> Ticketing: consume "payment.succeeded"
+Ticketing -> Broker: publish "ticket.issued"\n{reservationId, userId, ticketId}
 Res -> Broker: publish "reservation.expired"\n{reservationId, userId}
 Billing -> Broker: publish "payment.failed"\n{reservationId, userId, reason}
 
@@ -20,7 +23,7 @@ Broker -> Notif: consume event (partitioned by userId)
 Notif -> Notif: select template by event type
 Notif -> Log: persist notification record (PENDING)
 
-alt event type = order.confirmed
+alt event type = ticket.issued
   Notif -> Email: send ticket email (QR attached)
   Notif -> SMS: send booking confirmation SMS
 else event type = payment.failed

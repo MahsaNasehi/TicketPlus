@@ -1,0 +1,12 @@
+    1: """Object-oriented filesystem paths.
+       
+       This module provides classes to represent abstract paths and concrete
+       paths with operations that have semantics appropriate for different
+       operating systems.
+       """
+       
+    1: from ._abc import *
+    1: from ._local import *
+       
+    2: __all__ = (_abc.__all__ +
+    1:            _local.__all__)

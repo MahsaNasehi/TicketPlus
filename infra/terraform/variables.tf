@@ -26,6 +26,17 @@ variable "az_count" {
   description = "Number of availability zones to spread resources across"
   type        = number
   default     = 3
+
+  validation {
+    condition     = var.az_count >= 2 && var.az_count <= 4
+    error_message = "az_count must be between 2 and 4."
+  }
+}
+
+variable "eks_cluster_version" {
+  description = "EKS Kubernetes version supported in the selected AWS region"
+  type        = string
+  default     = "1.33"
 }
 
 variable "eks_node_instance_type" {
@@ -67,4 +78,16 @@ variable "redis_num_replicas" {
   description = "Number of read replicas per Redis shard for HA seat-lock storage"
   type        = number
   default     = 2
+}
+
+variable "kafka_instance_type" {
+  description = "Broker instance type for the managed Kafka cluster"
+  type        = string
+  default     = "kafka.m5.large"
+}
+
+variable "kafka_volume_size" {
+  description = "EBS storage in GiB allocated to each Kafka broker"
+  type        = number
+  default     = 100
 }

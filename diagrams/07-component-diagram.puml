@@ -30,7 +30,12 @@ package "Reservation Engine & Inventory Domain" {
 
 package "Billing & Checkout Domain" {
   [Checkout Service\n(Saga orchestrator)] as Checkout
-  database "Payment/Ticket DB" as BillingDB
+  database "Payment DB" as BillingDB
+}
+
+package "Ticketing Domain" {
+  [Ticketing Service\n(QR issuance and validation)] as Ticketing
+  database "Ticket DB" as TicketDB
 }
 
 package "Notification & Messaging Domain" {
@@ -64,6 +69,10 @@ Checkout --> Reservation : confirm / release
 Checkout --> BillingDB
 Checkout --> PG : charge
 Checkout --> Broker : publish order events
+
+Broker --> Ticketing : consume payment success
+Ticketing --> TicketDB
+Ticketing --> Broker : publish ticket events
 
 Broker --> Notif : consume events
 Notif --> NotifDB

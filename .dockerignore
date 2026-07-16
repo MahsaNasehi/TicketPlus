@@ -1,0 +1,13 @@
+.git
+.gitlab
+.terraform
+__pycache__
+*.pyc
+*.db
+*.tfstate*
+build
+coverage.xml
+htmlcov
+reports
+submission
+

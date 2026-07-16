@@ -1,0 +1,58 @@
+@startuml
+title TicketPlus - Kubernetes Telemetry and Canary Architecture
+skinparam componentStyle rectangle
+left to right direction
+
+cloud "Public Load Balancer" as LB
+
+node "Kubernetes Cluster (3 AZs)" {
+  component "Ingress / Traffic Splitter" as Ingress
+  component "Stable Pods\n95% traffic" as Stable
+  component "Canary Pods\n5% traffic" as Canary
+  component "Reservation Pods\nHPA: CPU + RPS" as Reservation
+  component "Notification Workers\nHPA: Kafka lag" as Workers
+  component "OpenTelemetry Collector" as OTel
+  component "Prometheus" as Prometheus
+  component "Alertmanager" as Alerts
+}
+
+database "PostgreSQL" as PG
+database "Redis" as Redis
+queue "Kafka" as Kafka
+component "Grafana" as Grafana
+component "Central Log / Trace Store" as Store
+actor "Primary On-Call" as OnCall
+
+LB --> Ingress
+Ingress --> Stable : 95%
+Ingress --> Canary : 5%
+Ingress --> Reservation
+Kafka --> Workers
+Reservation --> Redis
+Reservation --> PG
+
+Stable ..> OTel : traces / logs
+Canary ..> OTel : traces / logs
+Reservation ..> OTel : traces / logs
+Workers ..> OTel : traces / logs
+OTel --> Store
+
+Prometheus ..> Ingress : scrape
+Prometheus ..> Stable : scrape
+Prometheus ..> Canary : scrape
+Prometheus ..> Reservation : scrape
+Prometheus ..> Workers : scrape
+Prometheus ..> Kafka : exporters
+Prometheus ..> Redis : exporters
+Prometheus ..> PG : exporters
+Prometheus --> Grafana
+Prometheus --> Alerts : SLO / safety rules
+Alerts --> OnCall : page
+
+note bottom of Canary
+  Automatic rollback when error,
+  latency, or conflict thresholds
+  exceed the stable baseline.
+end note
+@enduml
+
