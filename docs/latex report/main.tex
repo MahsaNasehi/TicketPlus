@@ -1,104 +1,82 @@
 \documentclass[12pt,a4paper]{article}
 
-\usepackage[top=2.3cm,bottom=2.3cm,left=2.2cm,right=2.2cm]{geometry}
-\usepackage{graphicx}
-\usepackage{float}
+\usepackage{geometry}
 \usepackage{longtable}
 \usepackage{array}
 \usepackage{booktabs}
-\usepackage{enumitem}
-\usepackage{xcolor}
+\usepackage{float}
 \usepackage{listings}
+\usepackage{xcolor}
 \usepackage{hyperref}
-\usepackage{fancyhdr}
-\usepackage{setspace}
+\usepackage{pdflscape}
+\usepackage{makecell}
+\usepackage{tikz}
+\usepackage{graphicx}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+
 \usepackage{xepersian}
 
-\settextfont{DejaVu Sans}
-\setlatintextfont{DejaVu Sans}
-\setmonofont{DejaVu Sans Mono}
-
-\definecolor{primary}{HTML}{174A5B}
-\definecolor{accent}{HTML}{B45309}
-\definecolor{lightgray}{HTML}{F3F4F6}
-\definecolor{reserved}{HTML}{FFF7ED}
-\definecolor{reservedborder}{HTML}{C2410C}
-
-\hypersetup{
-    colorlinks=true,
-    linkcolor=primary,
-    urlcolor=accent,
-    pdftitle={گزارش طراحی و معماری سامانه تیکت‌پلاس},
-    pdfauthor={گروه پروژه مهندسی نرم‌افزار ۲}
+\geometry{
+    top=2.5cm,
+    bottom=2.5cm,
+    left=2cm,
+    right=2cm
 }
 
-\setlength{\parindent}{0.7cm}
-\setlength{\parskip}{0.25em}
+\settextfont[
+    Path=./,
+    UprightFont={XB Niloofar.ttf},
+    BoldFont={XB NiloofarBd.ttf},
+    ItalicFont={XB NiloofarIt.ttf},
+    BoldItalicFont={XB NiloofarBdIt.ttf}
+]{XB Niloofar}
+
+\setlatintextfont{TeX Gyre Termes}
+
 \renewcommand{\arraystretch}{1.35}
+\setlength{\tabcolsep}{4pt}
+
 \newcolumntype{P}[1]{>{\raggedleft\arraybackslash}p{#1}}
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 
+\newcommand{\ep}[1]{\lr{\texttt{#1}}}
+\newcommand{\tc}[1]{\lr{\texttt{#1}}}
+\newcommand{\api}[1]{\lr{\texttt{\footnotesize #1}}}
+\newcommand{\ok}{بله}
+\newcommand{\nok}{خیر}
+\newcommand{\na}{--}
+\newcommand{\smalltable}{\fontsize{8.5}{10}\selectfont}
 \newcommand{\en}[1]{\lr{\texttt{\detokenize{#1}}}}
 \newcommand{\term}[1]{\lr{#1}}
 \newcommand{\reservedbox}[2]{%
-  \begin{center}
-  \fcolorbox{reservedborder}{reserved}{%
-    \begin{minipage}{0.91\textwidth}
-      \textbf{#1}\\[0.3em]
-      #2
-    \end{minipage}}
-  \end{center}
+    \begin{quote}
+    \textbf{#1}\\[0.3em]
+    #2
+    \end{quote}
 }
 
+\definecolor{codegray}{gray}{0.95}
+
 \lstset{
+    backgroundcolor=\color{codegray},
     basicstyle=\ttfamily\small,
-    backgroundcolor=\color{lightgray},
-    frame=single,
     breaklines=true,
+    frame=single,
     numbers=left,
     numberstyle=\tiny,
     xleftmargin=1em,
     xrightmargin=1em
 }
 
-\pagestyle{fancy}
-\fancyhf{}
-\fancyhead[R]{گزارش طراحی و معماری تیکت‌پلاس}
-\fancyhead[L]{مهندسی نرم‌افزار ۲}
-\fancyfoot[C]{\thepage}
-\setlength{\headheight}{16pt}
+\title{گزارش طراحی و معماری سامانه جامع فروش بلیت رویداد تیکت‌پلاس}
+\author{نام اعضای گروه: \underline{\hspace{6cm}}}
+\date{\today}
 
 \begin{document}
 
-\begin{titlepage}
-\centering
-\vspace*{1.5cm}
-{\Large دانشگاه: \underline{\hspace{7cm}}\par}
-\vspace{1.2cm}
-{\Huge\bfseries طراحی و معماری سامانه جامع فروش بلیت رویداد\par}
-\vspace{0.4cm}
-{\LARGE\bfseries تیکت‌پلاس\par}
-\vspace{0.8cm}
-{\Large \term{TicketPlus}\par}
-\vspace{1.4cm}
-{\Large گزارش نهایی پروژه درس مهندسی نرم‌افزار ۲\par}
-\vfill
-\begin{tabular}{rl}
-استاد درس: & دکتر گوهری\\[0.4em]
-نام اعضای گروه: & \underline{\hspace{8cm}}\\[0.4em]
-شماره دانشجویی اعضا: & \underline{\hspace{8cm}}\\[0.4em]
-نیم‌سال: & بهار ۱۴۰۵\\
-\end{tabular}
-\vfill
-{\large تاریخ تحویل: \underline{\hspace{4cm}}\par}
-\end{titlepage}
-
-\pagenumbering{roman}
+\maketitle
 \tableofcontents
-\clearpage
-\listoffigures
-\clearpage
-\pagenumbering{arabic}
+\newpage
 
 \section*{چکیده}
 \addcontentsline{toc}{section}{چکیده}
@@ -129,7 +107,7 @@
 ایمن رد یا در وضعیت نیازمند تطبیق نگهداری می‌شود.
 
 \subsection{اهداف محصول}
-\begin{itemize}[rightmargin=1.2cm]
+\begin{itemize}
   \item جست‌وجوی سریع رویدادها بر اساس دسته، تاریخ، مکان و ظرفیت؛
   \item نمایش نقشه سالن و وضعیت قابل فهم صندلی‌ها؛
   \item تضمین اینکه هر صندلی در هر رویداد حداکثر یک مالک تأییدشده دارد؛
