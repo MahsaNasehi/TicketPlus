@@ -33,7 +33,6 @@ booking rules; it is not a graphical customer-facing website.
 - Docker Engine with the Compose plugin
 - `curl`
 - Python 3.12 or newer for running tests directly
-- XeLaTeX and `latexmk` only when rebuilding the Persian report
 
 ## Start the Reference API
 
