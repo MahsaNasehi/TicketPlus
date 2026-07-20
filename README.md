@@ -14,7 +14,6 @@ booking rules; it is not a graphical customer-facing website.
 |---|---|
 | UML sources | [`diagrams/`](diagrams/) |
 | Rendered UML diagrams | [`rendered diagrams/`](rendered%20diagrams/) |
-| Persian LaTeX report and PDF | [`latex report/`](latex%20report/) |
 | Product documents | [`docs/product/`](docs/product/) |
 | Production architecture and incidents | [`docs/architecture-and-operations/`](docs/architecture-and-operations/) |
 | QA, load, mutation, and coverage documentation | [`docs/quality/`](docs/quality/) |
