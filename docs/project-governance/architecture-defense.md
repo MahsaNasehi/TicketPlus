@@ -62,9 +62,3 @@ a future milestone driven by business RTO and market scale.
 | What proves the tests are effective? | Mutation score complements coverage; contention tests query durable state rather than trusting HTTP results. |
 | What remains externally supplied? | The final Product Vision, Risk Analysis, and Jira exports are maintained by the project team and added before packaging. |
 
-## Team Preparation
-
-Each member prepares one product workflow, one architecture decision, one
-failure scenario, one QA control, and one operational tradeoff. Answers should
-reference committed artifacts and acknowledge limitations rather than inventing
-unimplemented behavior.

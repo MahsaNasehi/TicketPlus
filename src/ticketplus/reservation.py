@@ -78,6 +78,7 @@ class ReservationService:
 
         with self._write_lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._expire_locked(connection, current)
             existing = connection.execute(
                 "SELECT * FROM reservations WHERE idempotency_key = ?",
                 (idempotency_key,),
@@ -86,7 +87,6 @@ class ReservationService:
                 connection.commit()
                 return self.get(existing["id"])
 
-            self._expire_locked(connection, current)
             reservation_id = str(uuid4())
             try:
                 connection.execute(
@@ -214,4 +214,3 @@ class ReservationService:
             "expiresAt": row["expires_at"],
             "seatIds": [seat["seat_id"] for seat in seats],
         }
-

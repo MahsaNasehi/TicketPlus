@@ -32,6 +32,15 @@ class ReservationTests(unittest.TestCase):
         second = self.service.lock_seats("buyer", "event", ["A-1"], "same-key")
         self.assertEqual(first["id"], second["id"])
 
+    def test_idempotent_retry_reports_expired_reservation(self):
+        now = datetime.now(UTC)
+        first = self.service.lock_seats("buyer", "event", ["A-1"], "old-key", now=now)
+        retry = self.service.lock_seats(
+            "buyer", "event", ["A-1"], "old-key", now=now + timedelta(seconds=11)
+        )
+        self.assertEqual(first["id"], retry["id"])
+        self.assertEqual("EXPIRED", retry["status"])
+
     def test_duplicate_seat_in_request_is_rejected(self):
         with self.assertRaises(ValueError):
             self.service.lock_seats("buyer", "event", ["A-1", "A-1"], "duplicate")
