@@ -62,7 +62,7 @@ Expected response:
 {"status": "UP"}
 ```
 
-## Presentation Demo
+## Demo
 
 ### 1. Reserve a seat
 
