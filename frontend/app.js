@@ -279,6 +279,9 @@
     $('lockBtn').hidden = false;
     $('lockBtn').disabled = true;
     $('lockNote').textContent = '';
+    $('payBtn').disabled = false;
+    $('payNote').textContent = '';
+    $('payNote').className = 'form-note';
     renderSeatMap();
     renderSelection();
     refreshSeatStatus();
@@ -398,6 +401,9 @@
       $('lockNote').textContent = '';
       $('lockBtn').hidden = true;
       $('reservationBox').hidden = false;
+      $('payBtn').disabled = false;
+      $('payNote').textContent = '';
+      $('payNote').className = 'form-note';
       $('reservationId').textContent = reservation.id;
       startCountdown(reservation.expiresAt);
       renderSeatMap();
