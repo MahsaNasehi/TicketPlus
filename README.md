@@ -116,7 +116,20 @@ curl -X POST http://127.0.0.1:9090/auth/register \
   -d '{"email":"admin@example.com","password":"change-me-please","name":"Admin","role":"admin"}'
 ```
 
-### 4. Start the frontend
+### 4. (optional) Seed 3 demo theaters
+
+```bash
+cd TicketPlus
+PYTHONPATH=src DATABASE_PATH=./ticketplus.db python3 scripts/seed_demo_events.py
+```
+
+Adds 3 fictitious theaters to the catalog — each with a different number
+of seating rows, seat counts, and per-seat prices — so the seat map and
+admin panel have something realistic to show right away. Safe to re-run;
+events that already exist (by title) are skipped, not duplicated. Make
+sure `DATABASE_PATH` matches whatever the backend in step 1 is using.
+
+### 5. Start the frontend
 
 ```bash
 cd TicketPlus/frontend
@@ -126,7 +139,7 @@ python3 -m http.server 5500
 Leave this terminal open too. If the backend is on a different host/port,
 update the API base URL in `frontend/app.js` accordingly.
 
-### 5. Open the app
+### 6. Open the app
 
 Go to <http://127.0.0.1:5500> in your browser. Log in with the admin
 account above to see the "add theater" panel.
