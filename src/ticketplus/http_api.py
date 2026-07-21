@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .auth import AuthService, EmailAlreadyRegistered, InvalidCredentials
 from .checkout import CheckoutService, NotificationService, PaymentResult, TicketingService
 from .events import EventBus
 from .reservation import LockConflict, ReservationService
@@ -15,6 +16,7 @@ from .reservation import LockConflict, ReservationService
 
 bus = EventBus()
 reservations = ReservationService(Path(os.getenv("DATABASE_PATH", "/data/ticketplus.db")), bus)
+auth = AuthService(Path(os.getenv("AUTH_DATABASE_PATH", os.getenv("DATABASE_PATH", "/data/ticketplus.db"))))
 
 
 def gateway(idempotency_key: str, amount_minor: int, currency: str):
@@ -31,7 +33,7 @@ class Handler(BaseHTTPRequestHandler):
     def _cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, Authorization")
 
     def _json(self, status: int, payload: object) -> None:
         body = json.dumps(payload).encode()
@@ -57,6 +59,17 @@ class Handler(BaseHTTPRequestHandler):
         if path in {"/health/live", "/health/ready"}:
             self._json(HTTPStatus.OK, {"status": "UP"})
             return
+        if path == "/auth/me":
+            try:
+                user = auth.user_from_auth_header(self.headers.get("Authorization"))
+                self._json(HTTPStatus.OK, {"user": user})
+            except InvalidCredentials as error:
+                self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
+            return
+        if path.startswith("/events/") and path.endswith("/seats"):
+            event_id = path.split("/")[2]
+            self._json(HTTPStatus.OK, reservations.seat_statuses(event_id))
+            return
         if path.startswith("/reservations/"):
             self._json(HTTPStatus.OK, reservations.get(path.rsplit("/", 1)[-1]))
             return
@@ -71,6 +84,16 @@ class Handler(BaseHTTPRequestHandler):
         try:
             path = urlparse(self.path).path
             body = self._body()
+            if path == "/auth/register":
+                user = auth.register(body.get("email", ""), body.get("password", ""), body.get("name", ""))
+                token = auth.issue_token(user["id"])
+                self._json(HTTPStatus.CREATED, {"token": token, "user": user})
+                return
+            if path == "/auth/login":
+                user = auth.login(body.get("email", ""), body.get("password", ""))
+                token = auth.issue_token(user["id"])
+                self._json(HTTPStatus.OK, {"token": token, "user": user})
+                return
             if path == "/reservations":
                 idempotency_key = self.headers.get("Idempotency-Key", "")
                 if len(idempotency_key) < 8:
@@ -98,6 +121,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
         except LockConflict as error:
             self._json(HTTPStatus.CONFLICT, {"error": "seat_unavailable", "message": str(error)})
+        except EmailAlreadyRegistered as error:
+            self._json(HTTPStatus.CONFLICT, {"error": "email_taken", "message": f"{error} is already registered"})
+        except InvalidCredentials as error:
+            self._json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_credentials", "message": str(error)})
         except (KeyError, ValueError) as error:
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_request", "message": str(error)})
         except Exception as error:
@@ -114,4 +141,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    

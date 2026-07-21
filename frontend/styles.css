@@ -7,6 +7,7 @@
   --paper:#f6eedd;
   --sold:#c1473d;
   --free:#4fa88d;
+  --locked:#d98c3f;
   --ink:#0d0c14;
   --text-hi:#f4efe4;
   --text-mid:#c9c2d6;
@@ -66,6 +67,37 @@ body{
 .conn__dot{width:9px; height:9px; border-radius:50%; background:var(--text-low); display:inline-block; box-shadow:0 0 0 3px rgba(255,255,255,0.05);}
 .conn__dot.ok{background:var(--free); box-shadow:0 0 0 3px rgba(79,168,141,0.2);}
 .conn__dot.bad{background:var(--sold); box-shadow:0 0 0 3px rgba(193,71,61,0.2);}
+
+.user-badge{display:flex; align-items:center; gap:10px; font-size:.82rem; color:var(--text-mid);}
+.user-badge__name{color:var(--text-hi); font-weight:600;}
+.user-badge__logout{
+  background:transparent; border:1px solid rgba(255,255,255,0.15); color:var(--text-low);
+  border-radius:8px; padding:5px 11px; font-size:.76rem; cursor:pointer; font-family:var(--serif-display);
+  transition:border-color .2s, color .2s;
+}
+.user-badge__logout:hover{border-color:var(--sold); color:var(--sold);}
+
+/* ---------- auth screen ---------- */
+.auth-wrap{
+  max-width:420px; margin:60px auto; background:var(--curtain); border:1px solid rgba(255,255,255,0.08);
+  border-radius:var(--radius); padding:28px 26px; box-shadow:0 20px 50px -20px rgba(0,0,0,0.6);
+}
+.auth-tabs{display:flex; gap:6px; margin-bottom:20px; background:var(--stage-night); border-radius:10px; padding:4px;}
+.auth-tab{
+  flex:1; text-align:center; padding:9px 0; border:none; background:transparent; color:var(--text-low);
+  border-radius:8px; cursor:pointer; font-family:var(--serif-display); font-size:.86rem; transition:background .15s, color .15s;
+}
+.auth-tab.is-active{background:linear-gradient(180deg, var(--gold), var(--gold-dim)); color:var(--ink); font-weight:700;}
+.auth-form{display:flex; flex-direction:column; gap:12px;}
+.auth-form label{font-size:.82rem; color:var(--text-mid); display:flex; flex-direction:column; gap:5px;}
+.auth-form input{
+  background:var(--stage-night); border:1px solid rgba(255,255,255,0.12); color:var(--text-hi);
+  border-radius:8px; padding:10px 12px; font-family:var(--serif-display); font-size:.9rem;
+}
+.auth-form input:focus{outline:2px solid var(--gold); outline-offset:1px;}
+.auth-note{font-size:.78rem; color:var(--text-low); margin:0; line-height:1.7;}
+.auth-note--error{color:var(--sold);}
+.auth-form__submit{margin-top:4px;}
 
 .settings-panel{
   max-width:1180px; margin:0 auto; padding:16px 24px; position:relative; z-index:19;
@@ -144,7 +176,9 @@ body{
 }
 .seat:hover:not(:disabled){transform:translateY(-2px);}
 .seat.is-selected{background:linear-gradient(180deg, var(--gold), var(--gold-dim)); color:var(--ink); font-weight:700;}
-.seat.is-taken{background:linear-gradient(180deg,#4a2a2a,#331c1c); color:rgba(255,255,255,0.35); cursor:not-allowed;}
+.seat.is-mine{background:linear-gradient(180deg,#5fc4a3,var(--free)); color:var(--ink); font-weight:700; box-shadow:0 0 0 2px rgba(79,168,141,0.35);}
+.seat.is-locked{background:linear-gradient(180deg,#e6a86a,var(--locked)); color:var(--ink); cursor:not-allowed; opacity:.85;}
+.seat.is-booked{background:linear-gradient(180deg,#4a2a2a,#331c1c); color:rgba(255,255,255,0.35); cursor:not-allowed;}
 .seat:disabled{cursor:not-allowed;}
 
 .auditorium__legend{display:flex; gap:20px; justify-content:center; margin-top:22px; color:var(--text-low); font-size:.78rem; flex-wrap:wrap;}
@@ -152,6 +186,8 @@ body{
 .dot{width:11px; height:11px; border-radius:3px; display:inline-block;}
 .dot--free{background:linear-gradient(180deg,#322d47,#241f36);}
 .dot--selected{background:linear-gradient(180deg,var(--gold),var(--gold-dim));}
+.dot--mine{background:linear-gradient(180deg,#5fc4a3,var(--free));}
+.dot--locked{background:linear-gradient(180deg,#e6a86a,var(--locked));}
 .dot--taken{background:linear-gradient(180deg,#4a2a2a,#331c1c);}
 
 /* ---------- ticket drawer (sidebar) ---------- */

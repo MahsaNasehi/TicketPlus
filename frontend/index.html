@@ -19,6 +19,11 @@
       <span class="marquee__tagline">رزرو هم‌زمان صندلی، تسویه امن، صدور آنی بلیت</span>
     </div>
     <div class="marquee__status">
+      <div class="user-badge" id="userBadge" hidden>
+        <span>خوش آمدید،</span>
+        <span class="user-badge__name" id="userName">—</span>
+        <button class="user-badge__logout" id="logoutBtn">خروج</button>
+      </div>
       <button class="gear" id="settingsBtn" title="تنظیمات اتصال به بک‌اند" aria-label="تنظیمات">⚙</button>
       <div class="conn" id="connIndicator">
         <span class="conn__dot" id="connDot"></span>
@@ -42,8 +47,43 @@
 
 <main class="stage-container">
 
+  <!-- Auth: login / register -->
+  <section class="section" id="authSection">
+    <div class="auth-wrap">
+      <div class="auth-tabs">
+        <button class="auth-tab is-active" id="tabLogin" type="button">ورود</button>
+        <button class="auth-tab" id="tabRegister" type="button">ثبت‌نام</button>
+      </div>
+
+      <form class="auth-form" id="loginForm">
+        <label>ایمیل
+          <input type="email" id="loginEmail" required autocomplete="email">
+        </label>
+        <label>رمز عبور
+          <input type="password" id="loginPassword" required autocomplete="current-password">
+        </label>
+        <button class="btn btn--gold auth-form__submit" id="loginSubmit" type="submit">ورود</button>
+        <p class="auth-note" id="loginNote"></p>
+      </form>
+
+      <form class="auth-form" id="registerForm" hidden>
+        <label>نام
+          <input type="text" id="registerName" required autocomplete="name">
+        </label>
+        <label>ایمیل
+          <input type="email" id="registerEmail" required autocomplete="email">
+        </label>
+        <label>رمز عبور (حداقل ۸ کاراکتر)
+          <input type="password" id="registerPassword" required autocomplete="new-password" minlength="8">
+        </label>
+        <button class="btn btn--gold auth-form__submit" id="registerSubmit" type="submit">ساخت حساب</button>
+        <p class="auth-note" id="registerNote"></p>
+      </form>
+    </div>
+  </section>
+
   <!-- Step 1: event picker -->
-  <section class="section" id="eventSection">
+  <section class="section" id="eventSection" hidden>
     <h2 class="section__title"><span class="section__eyebrow">EN&nbsp;SCÈNE</span>رویداد را انتخاب کنید</h2>
     <div class="event-row" id="eventRow"></div>
   </section>
@@ -57,8 +97,10 @@
       <div class="auditorium" id="auditorium"></div>
       <p class="auditorium__legend">
         <span><i class="dot dot--free"></i> آزاد</span>
-        <span><i class="dot dot--selected"></i> انتخاب شما</span>
-        <span><i class="dot dot--taken"></i> رزرو شده</span>
+        <span><i class="dot dot--selected"></i> انتخاب شما (قفل‌نشده)</span>
+        <span><i class="dot dot--mine"></i> قفل‌شده توسط شما</span>
+        <span><i class="dot dot--locked"></i> قفل‌شده توسط دیگری</span>
+        <span><i class="dot dot--taken"></i> فروخته‌شده</span>
       </p>
     </div>
 

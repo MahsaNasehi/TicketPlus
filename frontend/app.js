@@ -5,6 +5,7 @@
   const DEFAULT_API_BASE = 'http://localhost:8080';
   const state = {
     apiBase: localStorage.getItem('ticketplus.apiBase') || DEFAULT_API_BASE,
+    auth: null, // { token, user: { id, email, name } }
     events: [
       {
         id: 'shab-e-santoor',
@@ -46,9 +47,11 @@
     ],
     activeEvent: null,
     selectedSeats: new Set(),
-    takenSeats: new Set(), // learned locally from 409 conflicts, per session
+    lockedSeats: new Set(),  // PENDING on the server, owned by someone else (or us, before/after our own lock)
+    bookedSeats: new Set(),  // CONFIRMED on the server — permanently sold
     reservation: null,
     countdownTimer: null,
+    seatPollTimer: null,
   };
 
   /* ---------- helpers ---------- */
@@ -70,10 +73,11 @@
     toast._t = setTimeout(() => { el.hidden = true; }, 4200);
   }
 
-  async function api(method, path, { body, idemKey } = {}) {
+  async function api(method, path, { body, idemKey, auth = true } = {}) {
     const headers = {};
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (idemKey) headers['Idempotency-Key'] = idemKey;
+    if (auth && state.auth) headers['Authorization'] = `Bearer ${state.auth.token}`;
     let response;
     try {
       response = await fetch(state.apiBase + path, {
@@ -106,6 +110,118 @@
         ? 'اتصال برقرار نشد — نشانی API را بررسی کنید'
         : `بک‌اند پاسخ غیرمنتظره داد (${error.status})`;
     }
+  }
+
+  /* ---------- authentication ---------- */
+  function loadAuth() {
+    const raw = localStorage.getItem('ticketplus.auth');
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (_) { return null; }
+  }
+
+  function saveAuth(auth) {
+    state.auth = auth;
+    if (auth) localStorage.setItem('ticketplus.auth', JSON.stringify(auth));
+    else localStorage.removeItem('ticketplus.auth');
+    updateAuthUI();
+  }
+
+  function updateAuthUI() {
+    const loggedIn = !!state.auth;
+    $('authSection').hidden = loggedIn;
+    $('eventSection').hidden = !loggedIn;
+    $('userBadge').hidden = !loggedIn;
+    if (loggedIn) {
+      $('userName').textContent = state.auth.user.name;
+    } else {
+      $('seatSection').hidden = true;
+      $('ticketSection').hidden = true;
+      stopSeatPolling();
+      stopCountdown();
+    }
+  }
+
+  function switchAuthTab(tab) {
+    const isLogin = tab === 'login';
+    $('tabLogin').classList.toggle('is-active', isLogin);
+    $('tabRegister').classList.toggle('is-active', !isLogin);
+    $('loginForm').hidden = !isLogin;
+    $('registerForm').hidden = isLogin;
+  }
+
+  function describeAuthError(error, fallback) {
+    if (error.network) return 'اتصال به بک‌اند برقرار نشد. نشانی API را از ⚙ بررسی کنید.';
+    if (error.data && error.data.message) return error.data.message;
+    return fallback;
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    const btn = $('loginSubmit');
+    const note = $('loginNote');
+    btn.disabled = true;
+    note.textContent = '';
+    note.className = 'auth-note';
+    try {
+      const result = await api('POST', '/auth/login', {
+        body: { email: $('loginEmail').value.trim(), password: $('loginPassword').value },
+        auth: false,
+      });
+      saveAuth(result);
+      toast(`خوش آمدید، ${result.user.name}`, 'ok');
+      checkConnection();
+    } catch (error) {
+      note.textContent = describeAuthError(error, 'ورود ناموفق بود.');
+      note.className = 'auth-note auth-note--error';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function handleRegister(event) {
+    event.preventDefault();
+    const btn = $('registerSubmit');
+    const note = $('registerNote');
+    btn.disabled = true;
+    note.textContent = '';
+    note.className = 'auth-note';
+    try {
+      const result = await api('POST', '/auth/register', {
+        body: {
+          name: $('registerName').value.trim(),
+          email: $('registerEmail').value.trim(),
+          password: $('registerPassword').value,
+        },
+        auth: false,
+      });
+      saveAuth(result);
+      toast(`حساب شما ساخته شد. خوش آمدید، ${result.user.name}`, 'ok');
+      checkConnection();
+    } catch (error) {
+      note.textContent = describeAuthError(error, 'ثبت‌نام ناموفق بود.');
+      note.className = 'auth-note auth-note--error';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function handleLogout() {
+    saveAuth(null);
+    state.activeEvent = null;
+    state.selectedSeats.clear();
+    state.reservation = null;
+    [...$('eventRow').children].forEach((c) => c.classList.remove('is-active'));
+    toast('از حساب خود خارج شدید.', '');
+  }
+
+  function initAuth() {
+    state.auth = loadAuth();
+    updateAuthUI();
+    $('tabLogin').addEventListener('click', () => switchAuthTab('login'));
+    $('tabRegister').addEventListener('click', () => switchAuthTab('register'));
+    $('loginForm').addEventListener('submit', handleLogin);
+    $('registerForm').addEventListener('submit', handleRegister);
+    $('logoutBtn').addEventListener('click', handleLogout);
   }
 
   /* ---------- settings panel ---------- */
@@ -147,7 +263,8 @@
   function selectEvent(event) {
     state.activeEvent = event;
     state.selectedSeats.clear();
-    state.takenSeats.clear();
+    state.lockedSeats.clear();
+    state.bookedSeats.clear();
     state.reservation = null;
     stopCountdown();
 
@@ -163,12 +280,44 @@
     $('lockNote').textContent = '';
     renderSeatMap();
     renderSelection();
+    refreshSeatStatus();
+    startSeatPolling();
     $('seatSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* ---------- live seat status (GET /events/:id/seats) ---------- */
+  async function refreshSeatStatus() {
+    if (!state.activeEvent) return;
+    try {
+      const status = await api('GET', `/events/${state.activeEvent.id}/seats`);
+      state.bookedSeats = new Set(status.booked || []);
+      // "locked" from the server includes our own pending reservation too;
+      // renderSeatMap() tells those apart using state.reservation.seatIds.
+      state.lockedSeats = new Set(status.locked || []);
+      renderSeatMap();
+    } catch (_) {
+      // silent: the connection indicator already surfaces backend outages
+    }
+  }
+
+  function startSeatPolling() {
+    stopSeatPolling();
+    state.seatPollTimer = setInterval(refreshSeatStatus, 4000);
+  }
+
+  function stopSeatPolling() {
+    if (state.seatPollTimer) {
+      clearInterval(state.seatPollTimer);
+      state.seatPollTimer = null;
+    }
   }
 
   /* ---------- seat map ---------- */
   function renderSeatMap() {
     const wrap = $('auditorium');
+    const focusSeat = document.activeElement && document.activeElement.dataset
+      ? document.activeElement.dataset.seat
+      : null;
     wrap.innerHTML = '';
     const event = state.activeEvent;
     event.rows.forEach((row) => {
@@ -188,21 +337,28 @@
         applySeatVisual(btn, seatId);
         btn.addEventListener('click', () => toggleSeat(seatId, btn));
         rowEl.appendChild(btn);
+        if (seatId === focusSeat) btn.focus();
       }
       wrap.appendChild(rowEl);
     });
   }
 
   function applySeatVisual(btn, seatId) {
-    const taken = state.takenSeats.has(seatId);
-    const selected = state.selectedSeats.has(seatId);
-    btn.classList.toggle('is-taken', taken && !selected);
-    btn.classList.toggle('is-selected', selected);
-    btn.disabled = taken && !selected;
+    const isMine = !!(state.reservation && state.reservation.seatIds.includes(seatId));
+    const isBooked = state.bookedSeats.has(seatId);
+    const isLockedByOther = !isMine && state.lockedSeats.has(seatId);
+    const isSelected = state.selectedSeats.has(seatId);
+
+    btn.classList.toggle('is-booked', isBooked);
+    btn.classList.toggle('is-mine', isMine && !isBooked);
+    btn.classList.toggle('is-locked', isLockedByOther && !isBooked);
+    btn.classList.toggle('is-selected', isSelected && !isMine && !isBooked && !isLockedByOther);
+    btn.disabled = isBooked || isLockedByOther || isMine;
   }
 
   function toggleSeat(seatId, btn) {
     if (state.reservation) return; // locked already, no changes mid-flow
+    if (state.bookedSeats.has(seatId) || state.lockedSeats.has(seatId)) return; // taken by someone else
     if (state.selectedSeats.has(seatId)) {
       state.selectedSeats.delete(seatId);
     } else {
@@ -227,16 +383,17 @@
   /* ---------- lock seats (POST /reservations) ---------- */
   async function lockSeats() {
     const seats = [...state.selectedSeats];
-    if (!seats.length) return;
+    if (!seats.length || !state.auth) return;
     $('lockBtn').disabled = true;
     $('lockNote').textContent = 'در حال قفل کردن صندلی‌ها…';
     $('lockNote').className = 'form-note';
     try {
       const reservation = await api('POST', '/reservations', {
-        body: { userId: getOrCreateUserId(), eventId: state.activeEvent.id, seatIds: seats },
+        body: { userId: state.auth.user.id, eventId: state.activeEvent.id, seatIds: seats },
         idemKey: idempotencyKey('reserve'),
       });
       state.reservation = reservation;
+      state.lockedSeats = new Set([...state.lockedSeats, ...seats]);
       $('lockNote').textContent = '';
       $('lockBtn').hidden = true;
       $('reservationBox').hidden = false;
@@ -249,7 +406,7 @@
       if (error.network) {
         $('lockNote').textContent = 'اتصال به بک‌اند برقرار نشد. نشانی API را از ⚙ بررسی کنید.';
       } else if (error.status === 409) {
-        seats.forEach((seatId) => state.takenSeats.add(seatId));
+        seats.forEach((seatId) => state.lockedSeats.add(seatId));
         state.selectedSeats.clear();
         renderSeatMap();
         renderSelection();
@@ -261,15 +418,6 @@
       }
       $('lockNote').className = 'form-note form-note--error';
     }
-  }
-
-  function getOrCreateUserId() {
-    let id = localStorage.getItem('ticketplus.userId');
-    if (!id) {
-      id = `guest-${((crypto.randomUUID && crypto.randomUUID()) || Math.random().toString(16).slice(2)).slice(0, 8)}`;
-      localStorage.setItem('ticketplus.userId', id);
-    }
-    return id;
   }
 
   /* ---------- countdown ---------- */
@@ -306,7 +454,7 @@
     state.selectedSeats.clear();
     $('reservationBox').hidden = true;
     $('lockBtn').hidden = false;
-    renderSeatMap();
+    refreshSeatStatus();
     renderSelection();
   }
 
@@ -329,6 +477,7 @@
 
       if (attempt.status === 'SUCCEEDED') {
         stopCountdown();
+        stopSeatPolling();
         const ticket = await api('GET', `/tickets/by-reservation/${state.reservation.id}`);
         showTicket(ticket);
       } else if (attempt.status === 'FAILED') {
@@ -339,7 +488,7 @@
         state.selectedSeats.clear();
         $('reservationBox').hidden = true;
         $('lockBtn').hidden = false;
-        renderSeatMap();
+        refreshSeatStatus();
         renderSelection();
       } else {
         $('payNote').textContent = 'وضعیت پرداخت هنوز نامشخص است (در حال تطبیق با درگاه). لطفاً کمی بعد دوباره تلاش کنید.';
@@ -393,8 +542,11 @@
   /* ---------- restart ---------- */
   function restart() {
     stopCountdown();
+    stopSeatPolling();
     state.activeEvent = null;
     state.selectedSeats.clear();
+    state.lockedSeats.clear();
+    state.bookedSeats.clear();
     state.reservation = null;
     $('ticketSection').hidden = true;
     $('seatSection').hidden = true;
@@ -404,10 +556,12 @@
 
   /* ---------- wire up ---------- */
   document.addEventListener('DOMContentLoaded', () => {
+    initAuth();
     initSettings();
     renderEvents();
     checkConnection();
     setInterval(checkConnection, 15000);
+    switchAuthTab('login');
     $('lockBtn').addEventListener('click', lockSeats);
     $('payBtn').addEventListener('click', payAndIssue);
     $('restartBtn').addEventListener('click', restart);

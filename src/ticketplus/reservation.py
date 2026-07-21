@@ -195,6 +195,28 @@ class ReservationService:
             "DELETE FROM reservation_seats WHERE reservation_id = ?", (reservation_id,)
         )
 
+    def seat_statuses(self, event_id: str, *, now: datetime | None = None) -> dict[str, list[str]]:
+        """Return which seats are currently locked (pending payment) or booked (paid)."""
+        current = now or datetime.now(UTC)
+        with self._write_lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            self._expire_locked(connection, current)
+            connection.commit()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT reservation_seats.seat_id AS seat_id, reservations.status AS status
+                FROM reservation_seats
+                JOIN reservations ON reservations.id = reservation_seats.reservation_id
+                WHERE reservation_seats.event_id = ?
+                  AND reservations.status IN ('PENDING', 'CONFIRMED')
+                """,
+                (event_id,),
+            ).fetchall()
+        locked = sorted(row["seat_id"] for row in rows if row["status"] == "PENDING")
+        booked = sorted(row["seat_id"] for row in rows if row["status"] == "CONFIRMED")
+        return {"locked": locked, "booked": booked}
+
     def get(self, reservation_id: str) -> dict[str, object]:
         with self._connect() as connection:
             row = connection.execute(
