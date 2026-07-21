@@ -129,11 +129,12 @@
   function updateAuthUI() {
     const loggedIn = !!state.auth;
     $('authSection').hidden = loggedIn;
-    $('eventSection').hidden = !loggedIn;
+    $('appMain').hidden = !loggedIn;
     $('userBadge').hidden = !loggedIn;
     if (loggedIn) {
       $('userName').textContent = state.auth.user.name;
     } else {
+      $('eventSection').hidden = false;
       $('seatSection').hidden = true;
       $('ticketSection').hidden = true;
       stopSeatPolling();
@@ -145,8 +146,8 @@
     const isLogin = tab === 'login';
     $('tabLogin').classList.toggle('is-active', isLogin);
     $('tabRegister').classList.toggle('is-active', !isLogin);
-    $('loginForm').hidden = !isLogin;
-    $('registerForm').hidden = isLogin;
+    $('loginBox').hidden = !isLogin;
+    $('registerBox').hidden = isLogin;
   }
 
   function describeAuthError(error, fallback) {

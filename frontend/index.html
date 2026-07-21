@@ -49,12 +49,13 @@
 
   <!-- Auth: login / register -->
   <section class="section" id="authSection">
-    <div class="auth-wrap">
-      <div class="auth-tabs">
-        <button class="auth-tab is-active" id="tabLogin" type="button">ورود</button>
-        <button class="auth-tab" id="tabRegister" type="button">ثبت‌نام</button>
-      </div>
+    <div class="auth-tabs">
+      <button class="auth-tab is-active" id="tabLogin" type="button">ورود</button>
+      <button class="auth-tab" id="tabRegister" type="button">ثبت‌نام</button>
+    </div>
 
+    <div class="auth-wrap" id="loginBox">
+      <h2 class="auth-wrap__title">ورود به حساب</h2>
       <form class="auth-form" id="loginForm">
         <label>ایمیل
           <input type="email" id="loginEmail" required autocomplete="email">
@@ -65,8 +66,11 @@
         <button class="btn btn--gold auth-form__submit" id="loginSubmit" type="submit">ورود</button>
         <p class="auth-note" id="loginNote"></p>
       </form>
+    </div>
 
-      <form class="auth-form" id="registerForm" hidden>
+    <div class="auth-wrap" id="registerBox" hidden>
+      <h2 class="auth-wrap__title">ساخت حساب جدید</h2>
+      <form class="auth-form" id="registerForm">
         <label>نام
           <input type="text" id="registerName" required autocomplete="name">
         </label>
@@ -82,11 +86,16 @@
     </div>
   </section>
 
+  <!-- Everything below only exists once the user is logged in -->
+  <div id="appMain" hidden>
+
   <!-- Step 1: event picker -->
-  <section class="section" id="eventSection" hidden>
+  <section class="section" id="eventSection">
     <h2 class="section__title"><span class="section__eyebrow">EN&nbsp;SCÈNE</span>رویداد را انتخاب کنید</h2>
     <div class="event-row" id="eventRow"></div>
   </section>
+
+
 
   <!-- Step 2: seat map -->
   <section class="section" id="seatSection" hidden>
@@ -170,6 +179,8 @@
     </div>
     <button class="btn btn--ghost" id="restartBtn">رزرو یک بلیت دیگر</button>
   </section>
+
+  </div><!-- /#appMain -->
 
 </main>
 
