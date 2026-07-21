@@ -36,9 +36,14 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'admin')),
     created_at TEXT NOT NULL
 );
 """
+
+
+class NotAuthorized(Exception):
+    """Raised when an authenticated user lacks the role required for an action."""
 
 
 def _b64u(data: bytes) -> str:
@@ -71,7 +76,7 @@ class AuthService:
         digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, PBKDF2_ITERATIONS)
         return _b64u(digest)
 
-    def register(self, email: str, password: str, name: str) -> dict[str, str]:
+    def register(self, email: str, password: str, name: str, role: str = "user") -> dict[str, str]:
         email = (email or "").strip().lower()
         name = (name or "").strip()
         if "@" not in email or "." not in email.split("@")[-1] or len(email) < 5:
@@ -80,6 +85,8 @@ class AuthService:
             raise ValueError("password must be at least 8 characters")
         if not name:
             raise ValueError("name is required")
+        if role not in ("user", "admin"):
+            raise ValueError("role must be 'user' or 'admin'")
 
         salt = os.urandom(16)
         password_hash = self._hash_password(password, salt)
@@ -87,12 +94,13 @@ class AuthService:
         with self._write_lock, self._connect() as connection:
             try:
                 connection.execute(
-                    "INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)",
-                    (user_id, email, name, password_hash, _b64u(salt), datetime.now(UTC).isoformat()),
+                    "INSERT INTO users (id, email, name, password_hash, salt, role, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (user_id, email, name, password_hash, _b64u(salt), role, datetime.now(UTC).isoformat()),
                 )
             except sqlite3.IntegrityError as error:
                 raise EmailAlreadyRegistered(email) from error
-        return {"id": user_id, "email": email, "name": name}
+        return {"id": user_id, "email": email, "name": name, "role": role}
 
     def login(self, email: str, password: str) -> dict[str, str]:
         email = (email or "").strip().lower()
@@ -103,7 +111,7 @@ class AuthService:
         expected = self._hash_password(password or "", _b64u_decode(row["salt"]))
         if not hmac.compare_digest(expected, row["password_hash"]):
             raise InvalidCredentials("invalid email or password")
-        return {"id": row["id"], "email": row["email"], "name": row["name"]}
+        return {"id": row["id"], "email": row["email"], "name": row["name"], "role": row["role"]}
 
     def issue_token(self, user_id: str) -> str:
         payload = {
@@ -136,7 +144,7 @@ class AuthService:
             row = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not row:
             raise InvalidCredentials("user no longer exists")
-        return {"id": row["id"], "email": row["email"], "name": row["name"]}
+        return {"id": row["id"], "email": row["email"], "name": row["name"], "role": row["role"]}
 
     def user_from_token(self, token: str) -> dict[str, str]:
         return self.get_user(self._verify_token(token))
@@ -145,3 +153,10 @@ class AuthService:
         if not header_value or not header_value.startswith("Bearer "):
             raise InvalidCredentials("missing bearer token")
         return self.user_from_token(header_value[len("Bearer ") :])
+
+    def require_admin(self, header_value: str | None) -> dict[str, str]:
+        """Return the authenticated user, or raise if they are not an admin."""
+        user = self.user_from_auth_header(header_value)
+        if user["role"] != "admin":
+            raise NotAuthorized("admin role is required for this action")
+        return user

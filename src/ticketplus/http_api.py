@@ -8,7 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .auth import AuthService, EmailAlreadyRegistered, InvalidCredentials
+from .auth import AuthService, EmailAlreadyRegistered, InvalidCredentials, NotAuthorized
+from .catalog import EventCatalog, InvalidEvent
 from .checkout import CheckoutService, NotificationService, PaymentResult, TicketingService
 from .events import EventBus
 # اضافه کردن ReservationNotFound برای مدیریت خطای عدم وجود رزرویشن
@@ -18,6 +19,7 @@ from .reservation import LockConflict, ReservationService, ReservationNotFound
 bus = EventBus()
 reservations = ReservationService(Path(os.getenv("DATABASE_PATH", "/data/ticketplus.db")), bus)
 auth = AuthService(Path(os.getenv("AUTH_DATABASE_PATH", os.getenv("DATABASE_PATH", "/data/ticketplus.db"))))
+catalog = EventCatalog(Path(os.getenv("DATABASE_PATH", "/data/ticketplus.db")))
 
 
 def gateway(idempotency_key: str, amount_minor: int, currency: str):
@@ -68,6 +70,9 @@ class Handler(BaseHTTPRequestHandler):
                 except InvalidCredentials as error:
                     self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
                 return
+            if path == "/events":
+                self._json(HTTPStatus.OK, catalog.list())
+                return
             if path.startswith("/events/") and path.endswith("/seats"):
                 event_id = path.split("/")[2]
                 self._json(HTTPStatus.OK, reservations.seat_statuses(event_id))
@@ -85,6 +90,8 @@ class Handler(BaseHTTPRequestHandler):
         except ReservationNotFound as error:
             # مدیریت خطای عدم وجود رزرویشن با بازگرداندن پاسخ ۴۰۴
             self._json(HTTPStatus.NOT_FOUND, {"error": "reservation_not_found", "message": str(error)})
+        except InvalidEvent as error:
+            self._json(HTTPStatus.NOT_FOUND, {"error": "event_not_found", "message": str(error)})
         except InvalidCredentials as error:
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
         except Exception as error:
@@ -104,6 +111,11 @@ class Handler(BaseHTTPRequestHandler):
                 user = auth.login(body.get("email", ""), body.get("password", ""))
                 token = auth.issue_token(user["id"])
                 self._json(HTTPStatus.OK, {"token": token, "user": user})
+                return
+            if path == "/events":
+                auth.require_admin(self.headers.get("Authorization"))
+                event = catalog.create_event(body.get("title", ""), body.get("priceToman"))
+                self._json(HTTPStatus.CREATED, event)
                 return
             if path == "/reservations":
                 idempotency_key = self.headers.get("Idempotency-Key", "")
@@ -134,8 +146,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.CONFLICT, {"error": "seat_unavailable", "message": str(error)})
         except EmailAlreadyRegistered as error:
             self._json(HTTPStatus.CONFLICT, {"error": "email_taken", "message": f"{error} is already registered"})
+        except NotAuthorized as error:
+            self._json(HTTPStatus.FORBIDDEN, {"error": "forbidden", "message": str(error)})
         except InvalidCredentials as error:
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_credentials", "message": str(error)})
+        except InvalidEvent as error:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_event", "message": str(error)})
         except (KeyError, ValueError) as error:
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_request", "message": str(error)})
         except Exception as error:
