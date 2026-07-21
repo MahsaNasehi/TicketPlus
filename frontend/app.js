@@ -1,9 +1,6 @@
 (() => {
   'use strict';
 
-  // Only this account gets the settings panel and the "add a new theater" admin panel.
-  const ADMIN_EMAIL = 'rosenazeri83@gmail.com';
-
   /* ---------- config & state ---------- */
   const DEFAULT_API_BASE = 'http://localhost:8080';
   const state = {
@@ -77,8 +74,7 @@
   }
 
   function isAdmin() {
-    return !!(state.auth && state.auth.user && state.auth.user.email &&
-      state.auth.user.email.toLowerCase() === ADMIN_EMAIL);
+    return !!(state.auth && state.auth.user && state.auth.user.role === 'admin');
   }
 
   /* ---------- admin-only UI (settings panel + "add theater" panel) ---------- */
@@ -86,9 +82,19 @@
     const admin = isAdmin();
     $('settingsBtn').hidden = !admin;
     $('adminSection').hidden = !admin;
-    if (!admin) {
+    if (admin) {
+      // Admins have one job here: add a new theater/concert. Send them
+      // straight to that form instead of the customer booking flow.
+      $('adminForm').hidden = false;
+      $('eventSection').hidden = true;
+      $('seatSection').hidden = true;
+      $('ticketSection').hidden = true;
+      stopSeatPolling();
+      stopCountdown();
+    } else {
       $('settingsPanel').hidden = true;
       $('adminForm').hidden = true;
+      $('eventSection').hidden = false;
     }
   }
 
@@ -572,8 +578,8 @@
         <label>تعداد صندلی
           <input type="number" min="1" data-field="seats" data-index="${index}" value="${row.seats}">
         </label>
-        <label>قیمت هر صندلی (ریال)
-          <input type="number" min="0" step="1000" data-field="priceMinor" data-index="${index}" value="${row.priceMinor}">
+        <label>قیمت هر صندلی (ریال) — حداقل ۱۰۰٬۰۰۱
+          <input type="number" min="100001" step="1000" data-field="priceMinor" data-index="${index}" value="${row.priceMinor}">
         </label>
         <button type="button" class="admin-row__remove" data-remove="${index}" ${state.adminRows.length <= 1 ? 'disabled' : ''}>حذف</button>
       `;
@@ -632,9 +638,9 @@
       priceMinor: Number(row.priceMinor),
     }));
     const rowsAreValid = rows.every((row) => row.label && Number.isInteger(row.seats) && row.seats > 0 &&
-      Number.isInteger(row.priceMinor) && row.priceMinor > 0);
+      Number.isInteger(row.priceMinor) && row.priceMinor > 100000);
     if (!rowsAreValid) {
-      note.textContent = 'برای هر ردیف، برچسب، تعداد صندلی و قیمت معتبر لازم است.';
+      note.textContent = 'برای هر ردیف، برچسب، تعداد صندلی و قیمت معتبر لازم است (قیمت هر ردیف باید بیشتر از ۱۰۰٬۰۰۰ باشد).';
       note.className = 'form-note form-note--error';
       return;
     }

@@ -16,6 +16,10 @@ class HttpApiTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         os.environ["DATABASE_PATH"] = str(Path(cls.temp.name) / "api.db")
         cls.api = importlib.import_module("ticketplus.http_api")
+        # See test_events_api.py for why this reload is necessary: module-level
+        # service singletons are built at import time from DATABASE_PATH, and
+        # Python caches modules by name across test classes/files.
+        cls.api = importlib.reload(cls.api)
         try:
             cls.server = ThreadingHTTPServer(("127.0.0.1", 0), cls.api.Handler)
         except PermissionError as error:
