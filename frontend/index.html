@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TicketPlus — رزرو و صدور بلیت</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="houselights" aria-hidden="true"></div>
+
+<header class="marquee">
+  <div class="marquee__inner">
+    <div class="marquee__brand">
+      <span class="marquee__wordmark">Ticket<em>Plus</em></span>
+      <span class="marquee__tagline">رزرو هم‌زمان صندلی، تسویه امن، صدور آنی بلیت</span>
+    </div>
+    <div class="marquee__status">
+      <button class="gear" id="settingsBtn" title="تنظیمات اتصال به بک‌اند" aria-label="تنظیمات">⚙</button>
+      <div class="conn" id="connIndicator">
+        <span class="conn__dot" id="connDot"></span>
+        <span class="conn__label" id="connLabel">در حال بررسی اتصال…</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="settings-panel" id="settingsPanel" hidden>
+  <div class="settings-panel__row">
+    <label for="apiBaseInput">نشانی پایه‌ی API بک‌اند</label>
+    <input id="apiBaseInput" type="text" inputmode="url" spellcheck="false" placeholder="http://localhost:8080">
+    <button id="apiBaseSave" class="btn btn--gold btn--small">ذخیره</button>
+  </div>
+  <p class="settings-panel__hint">
+    این فرانت مستقیماً به سرویس مرجع <code>ticketplus.http_api</code> با پروتکل REST متصل می‌شود (رزرو، تسویه، صدور بلیت).
+    اگر بک‌اند را با Docker Compose بالا آورده‌اید، معمولاً <code>http://localhost:8080</code> درست است.
+  </p>
+</div>
+
+<main class="stage-container">
+
+  <!-- Step 1: event picker -->
+  <section class="section" id="eventSection">
+    <h2 class="section__title"><span class="section__eyebrow">EN&nbsp;SCÈNE</span>رویداد را انتخاب کنید</h2>
+    <div class="event-row" id="eventRow"></div>
+  </section>
+
+  <!-- Step 2: seat map -->
+  <section class="section" id="seatSection" hidden>
+    <div class="stage-frame">
+      <div class="stage-frame__bar">
+        <span>SCÈNE</span>
+      </div>
+      <div class="auditorium" id="auditorium"></div>
+      <p class="auditorium__legend">
+        <span><i class="dot dot--free"></i> آزاد</span>
+        <span><i class="dot dot--selected"></i> انتخاب شما</span>
+        <span><i class="dot dot--taken"></i> رزرو شده</span>
+      </p>
+    </div>
+
+    <aside class="ticket-drawer" id="ticketDrawer">
+      <h3 class="ticket-drawer__title">صندلی‌های انتخابی</h3>
+      <ul class="seat-chips" id="seatChips"><li class="seat-chips__empty">هنوز صندلی‌ای انتخاب نکرده‌اید</li></ul>
+
+      <div class="price-row">
+        <span>جمع کل</span>
+        <strong id="priceTotal">۰ ریال</strong>
+      </div>
+
+      <button class="btn btn--gold btn--block" id="lockBtn" disabled>قفل کردن صندلی‌ها</button>
+      <p class="form-note" id="lockNote"></p>
+
+      <!-- appears after successful lock -->
+      <div class="reservation-box" id="reservationBox" hidden>
+        <div class="reservation-box__row">
+          <span>کد رزرو</span>
+          <code id="reservationId">—</code>
+        </div>
+        <div class="reservation-box__row">
+          <span>مهلت باقی‌مانده</span>
+          <span class="countdown" id="countdown">۱۰:۰۰</span>
+        </div>
+        <p class="form-note form-note--warn">
+          طبق قرارداد بک‌اند، امکان لغو دستی رزرو از این واسط وجود ندارد؛ اگر تا پایان مهلت تسویه نکنید، صندلی‌ها خودکار آزاد می‌شوند.
+        </p>
+
+        <hr class="divider">
+
+        <h3 class="ticket-drawer__title">تسویه حساب</h3>
+        <div class="currency-row">
+          <label for="currencySelect">واحد پول</label>
+          <select id="currencySelect">
+            <option value="IRR" selected>ریال (IRR)</option>
+            <option value="USD">دلار (USD)</option>
+            <option value="EUR">یورو (EUR)</option>
+          </select>
+        </div>
+        <button class="btn btn--emerald btn--block" id="payBtn">پرداخت و صدور بلیت</button>
+        <p class="form-note" id="payNote"></p>
+      </div>
+    </aside>
+  </section>
+
+  <!-- Step 3: issued ticket -->
+  <section class="section" id="ticketSection" hidden>
+    <h2 class="section__title"><span class="section__eyebrow">ADMIT&nbsp;ONE</span>بلیت شما صادر شد</h2>
+    <div class="stub" id="stub">
+      <div class="stub__main">
+        <span class="stub__label">TicketPlus</span>
+        <h3 class="stub__event" id="stubEvent">—</h3>
+        <p class="stub__venue" id="stubVenue">—</p>
+        <div class="stub__grid">
+          <div><span>صندلی‌ها</span><strong id="stubSeats">—</strong></div>
+          <div><span>کد رزرو</span><strong id="stubReservation">—</strong></div>
+          <div><span>کد بلیت</span><strong id="stubTicketId">—</strong></div>
+        </div>
+      </div>
+      <div class="stub__perf" aria-hidden="true"></div>
+      <div class="stub__side">
+        <span class="stub__admit">ADMIT ONE</span>
+        <div class="qr" id="qrCode"></div>
+        <code class="stub__hash" id="stubHash">—</code>
+      </div>
+    </div>
+    <button class="btn btn--ghost" id="restartBtn">رزرو یک بلیت دیگر</button>
+  </section>
+
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
