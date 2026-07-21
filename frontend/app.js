@@ -103,7 +103,6 @@
     try {
       await api('GET', '/health/ready');
       dot.className = 'conn__dot ok';
-      label.textContent = 'به بک‌اند متصل است';
     } catch (error) {
       dot.className = 'conn__dot bad';
       label.textContent = error.network
