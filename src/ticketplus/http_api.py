@@ -71,7 +71,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
                 return
             if path == "/events":
-                self._json(HTTPStatus.OK, {"events": catalog.list()})
+                self._json(HTTPStatus.OK, catalog.list())
                 return
             if path.startswith("/events/") and path.endswith("/seats"):
                 event_id = path.split("/")[2]
@@ -103,12 +103,7 @@ class Handler(BaseHTTPRequestHandler):
             path = urlparse(self.path).path
             body = self._body()
             if path == "/auth/register":
-                user = auth.register(
-                    body.get("email", ""),
-                    body.get("password", ""),
-                    body.get("name", ""),
-                    body.get("role", "user"),
-                )
+                user = auth.register(body.get("email", ""), body.get("password", ""), body.get("name", ""))
                 token = auth.issue_token(user["id"])
                 self._json(HTTPStatus.CREATED, {"token": token, "user": user})
                 return
@@ -119,12 +114,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/events":
                 auth.require_admin(self.headers.get("Authorization"))
-                event = catalog.create_event(
-                    body.get("title", ""),
-                    body.get("venue", ""),
-                    body.get("dateLabel", ""),
-                    body.get("rows", []),
-                )
+                event = catalog.create_event(body.get("title", ""), body.get("priceToman"))
                 self._json(HTTPStatus.CREATED, event)
                 return
             if path == "/reservations":
