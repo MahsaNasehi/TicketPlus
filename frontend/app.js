@@ -1,50 +1,15 @@
 (() => {
   'use strict';
 
+  // Only this account gets the settings panel and the "add a new theater" admin panel.
+  const ADMIN_EMAIL = 'rosenazeri83@gmail.com';
+
   /* ---------- config & state ---------- */
   const DEFAULT_API_BASE = 'http://localhost:8080';
   const state = {
     apiBase: localStorage.getItem('ticketplus.apiBase') || DEFAULT_API_BASE,
     auth: null, // { token, user: { id, email, name } }
-    events: [
-      {
-        id: 'shab-e-santoor',
-        title: 'شب موسیقی سنتی ایرانی',
-        venue: 'تالار وحدت، تهران',
-        date: 'پنجشنبه ۳۰ مرداد — ساعت ۲۱:۰۰',
-        priceMinor: 850000,
-        rows: [
-          { label: 'A', seats: 8 },
-          { label: 'B', seats: 10 },
-          { label: 'C', seats: 10 },
-        ],
-      },
-      {
-        id: 'khashm-o-hayahoo',
-        title: 'نمایش «خشم و هیاهو»',
-        venue: 'تئاتر شهر، سالن اصلی',
-        date: 'جمعه ۷ شهریور — ساعت ۱۹:۳۰',
-        priceMinor: 450000,
-        rows: [
-          { label: 'A', seats: 9 },
-          { label: 'B', seats: 11 },
-          { label: 'C', seats: 11 },
-          { label: 'D', seats: 13 },
-        ],
-      },
-      {
-        id: 'concert-e-rock',
-        title: 'کنسرت راک شهر',
-        venue: 'مجموعه ورزشی آزادی',
-        date: 'جمعه ۲۱ شهریور — ساعت ۲۰:۰۰',
-        priceMinor: 1200000,
-        rows: [
-          { label: 'A', seats: 12 },
-          { label: 'B', seats: 14 },
-          { label: 'C', seats: 14 },
-        ],
-      },
-    ],
+    events: [], // loaded from the backend catalog, see loadEvents()
     activeEvent: null,
     selectedSeats: new Set(),
     lockedSeats: new Set(),  // PENDING on the server, owned by someone else (or us, before/after our own lock)
@@ -52,6 +17,7 @@
     reservation: null,
     countdownTimer: null,
     seatPollTimer: null,
+    adminRows: [], // draft seating rows while the admin is composing a new event
   };
 
   /* ---------- helpers ---------- */
@@ -96,21 +62,6 @@
     return data;
   }
 
-  /* ---------- connection indicator ---------- */
-  async function checkConnection() {
-    const dot = $('connDot');
-    const label = $('connLabel');
-    try {
-      await api('GET', '/health/ready');
-      dot.className = 'conn__dot ok';
-    } catch (error) {
-      dot.className = 'conn__dot bad';
-      label.textContent = error.network
-        ? 'اتصال برقرار نشد — نشانی API را بررسی کنید'
-        : `بک‌اند پاسخ غیرمنتظره داد (${error.status})`;
-    }
-  }
-
   /* ---------- authentication ---------- */
   function loadAuth() {
     const raw = localStorage.getItem('ticketplus.auth');
@@ -123,6 +74,22 @@
     if (auth) localStorage.setItem('ticketplus.auth', JSON.stringify(auth));
     else localStorage.removeItem('ticketplus.auth');
     updateAuthUI();
+  }
+
+  function isAdmin() {
+    return !!(state.auth && state.auth.user && state.auth.user.email &&
+      state.auth.user.email.toLowerCase() === ADMIN_EMAIL);
+  }
+
+  /* ---------- admin-only UI (settings panel + "add theater" panel) ---------- */
+  function updateAdminUI() {
+    const admin = isAdmin();
+    $('settingsBtn').hidden = !admin;
+    $('adminSection').hidden = !admin;
+    if (!admin) {
+      $('settingsPanel').hidden = true;
+      $('adminForm').hidden = true;
+    }
   }
 
   function updateAuthUI() {
@@ -139,6 +106,7 @@
       stopSeatPolling();
       stopCountdown();
     }
+    updateAdminUI();
   }
 
   function switchAuthTab(tab) {
@@ -150,7 +118,7 @@
   }
 
   function describeAuthError(error, fallback) {
-    if (error.network) return 'اتصال به بک‌اند برقرار نشد. نشانی API را از ⚙ بررسی کنید.';
+    if (error.network) return 'ارتباط با سرور برقرار نشد. لطفاً اتصال اینترنت خود را بررسی کنید.';
     if (error.data && error.data.message) return error.data.message;
     return fallback;
   }
@@ -169,7 +137,7 @@
       });
       saveAuth(result);
       toast(`خوش آمدید، ${result.user.name}`, 'ok');
-      checkConnection();
+      loadEvents();
     } catch (error) {
       note.textContent = describeAuthError(error, 'ورود ناموفق بود.');
       note.className = 'auth-note auth-note--error';
@@ -196,7 +164,7 @@
       });
       saveAuth(result);
       toast(`حساب شما ساخته شد. خوش آمدید، ${result.user.name}`, 'ok');
-      checkConnection();
+      loadEvents();
     } catch (error) {
       note.textContent = describeAuthError(error, 'ثبت‌نام ناموفق بود.');
       note.className = 'auth-note auth-note--error';
@@ -210,7 +178,7 @@
     state.activeEvent = null;
     state.selectedSeats.clear();
     state.reservation = null;
-    [...$('eventRow').children].forEach((c) => c.classList.remove('is-active'));
+    renderEvents();
     toast('از حساب خود خارج شدید.', '');
   }
 
@@ -224,7 +192,7 @@
     $('logoutBtn').addEventListener('click', handleLogout);
   }
 
-  /* ---------- settings panel ---------- */
+  /* ---------- settings panel (admin-only) ---------- */
   function initSettings() {
     $('apiBaseInput').value = state.apiBase;
     $('settingsBtn').addEventListener('click', () => {
@@ -235,9 +203,43 @@
       if (!value) return;
       state.apiBase = value;
       localStorage.setItem('ticketplus.apiBase', value);
-      toast('نشانی API ذخیره شد', 'ok');
-      checkConnection();
+      toast('نشانی سرور ذخیره شد', 'ok');
+      loadEvents();
     });
+  }
+
+  /* ---------- event catalog (GET/POST /events) ---------- */
+  async function loadEvents() {
+    try {
+      const data = await api('GET', '/events');
+      state.events = data.events || [];
+      renderEvents();
+    } catch (_) {
+      // keep showing whichever list we already had; individual actions surface their own errors
+    }
+  }
+
+  function rowPriceMap(event) {
+    const map = {};
+    (event.rows || []).forEach((row) => { map[row.label] = row.priceMinor; });
+    return map;
+  }
+
+  function priceRangeLabel(event) {
+    const prices = (event.rows || []).map((row) => row.priceMinor);
+    if (!prices.length) return '';
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    return min === max
+      ? `بلیت ${fa.format(min)} ریال`
+      : `بلیت از ${fa.format(min)} تا ${fa.format(max)} ریال`;
+  }
+
+  function seatPrice(seatId) {
+    if (!state.activeEvent) return 0;
+    const rowLabel = seatId.split('-')[0];
+    const row = (state.activeEvent.rows || []).find((r) => r.label === rowLabel);
+    return row ? row.priceMinor : 0;
   }
 
   /* ---------- event picker ---------- */
@@ -248,12 +250,14 @@
       const card = document.createElement('button');
       card.className = 'event-card';
       card.type = 'button';
+      card.dataset.eventId = event.id;
+      card.classList.toggle('is-active', !!(state.activeEvent && state.activeEvent.id === event.id));
       card.innerHTML = `
         <span class="event-card__kicker">Live&nbsp;Booking</span>
         <h3 class="event-card__title">${event.title}</h3>
         <p class="event-card__meta">${event.venue}</p>
-        <p class="event-card__meta">${event.date}</p>
-        <div class="event-card__price">بلیت از ${fa.format(event.priceMinor)} ریال</div>
+        <p class="event-card__meta">${event.dateLabel}</p>
+        <div class="event-card__price">${priceRangeLabel(event)}</div>
       `;
       card.addEventListener('click', () => selectEvent(event));
       row.appendChild(card);
@@ -268,9 +272,7 @@
     state.reservation = null;
     stopCountdown();
 
-    [...$('eventRow').children].forEach((card, i) => {
-      card.classList.toggle('is-active', state.events[i].id === event.id);
-    });
+    renderEvents();
 
     $('seatSection').hidden = false;
     $('ticketSection').hidden = true;
@@ -299,7 +301,7 @@
       state.lockedSeats = new Set(status.locked || []);
       renderSeatMap();
     } catch (_) {
-      // silent: the connection indicator already surfaces backend outages
+      // silent: a stale seat map is not worth interrupting the user over
     }
   }
 
@@ -323,6 +325,7 @@
       : null;
     wrap.innerHTML = '';
     const event = state.activeEvent;
+    const prices = rowPriceMap(event);
     event.rows.forEach((row) => {
       const rowEl = document.createElement('div');
       rowEl.className = 'auditorium__row';
@@ -337,6 +340,7 @@
         btn.className = 'seat';
         btn.textContent = n;
         btn.dataset.seat = seatId;
+        btn.title = `ردیف ${row.label} — ${fa.format(prices[row.label] || 0)} ریال`;
         applySeatVisual(btn, seatId);
         btn.addEventListener('click', () => toggleSeat(seatId, btn));
         rowEl.appendChild(btn);
@@ -375,10 +379,10 @@
     const chips = $('seatChips');
     const seats = [...state.selectedSeats].sort();
     chips.innerHTML = seats.length
-      ? seats.map((s) => `<li class="seat-chip">${s}</li>`).join('')
+      ? seats.map((s) => `<li class="seat-chip">${s} · ${fa.format(seatPrice(s))} ریال</li>`).join('')
       : '<li class="seat-chips__empty">هنوز صندلی‌ای انتخاب نکرده‌اید</li>';
 
-    const total = seats.length * (state.activeEvent ? state.activeEvent.priceMinor : 0);
+    const total = seats.reduce((sum, s) => sum + seatPrice(s), 0);
     $('priceTotal').textContent = `${fa.format(total)} ریال`;
     $('lockBtn').disabled = seats.length === 0 || !!state.reservation;
   }
@@ -410,17 +414,19 @@
     } catch (error) {
       $('lockBtn').disabled = false;
       if (error.network) {
-        $('lockNote').textContent = 'اتصال به بک‌اند برقرار نشد. نشانی API را از ⚙ بررسی کنید.';
+        $('lockNote').textContent = 'ارتباط با سرور برقرار نشد. لطفاً دوباره تلاش کنید.';
       } else if (error.status === 409) {
         seats.forEach((seatId) => state.lockedSeats.add(seatId));
         state.selectedSeats.clear();
         renderSeatMap();
         renderSelection();
         $('lockNote').textContent = 'حداقل یکی از صندلی‌های انتخابی هم‌زمان توسط کاربر دیگری قفل شد. انتخاب پاک شد؛ صندلی‌های دیگری را امتحان کنید.';
+      } else if (error.status === 404) {
+        $('lockNote').textContent = 'این رویداد دیگر در دسترس نیست.';
       } else if (error.status === 400) {
         $('lockNote').textContent = `درخواست نامعتبر: ${error.data && error.data.message ? error.data.message : ''}`;
       } else {
-        $('lockNote').textContent = 'خطای غیرمنتظره از بک‌اند دریافت شد.';
+        $('lockNote').textContent = 'خطای غیرمنتظره‌ای رخ داد. لطفاً دوباره تلاش کنید.';
       }
       $('lockNote').className = 'form-note form-note--error';
     }
@@ -473,7 +479,7 @@
     $('payNote').className = 'form-note';
 
     const currency = $('currencySelect').value;
-    const amountMinor = state.selectedSeats.size * state.activeEvent.priceMinor;
+    const amountMinor = [...state.selectedSeats].reduce((sum, s) => sum + seatPrice(s), 0);
 
     try {
       const attempt = await api('POST', '/checkouts', {
@@ -497,18 +503,18 @@
         refreshSeatStatus();
         renderSelection();
       } else {
-        $('payNote').textContent = 'وضعیت پرداخت هنوز نامشخص است (در حال تطبیق با درگاه). لطفاً کمی بعد دوباره تلاش کنید.';
+        $('payNote').textContent = 'وضعیت پرداخت هنوز نامشخص است (در حال تطبیق). لطفاً کمی بعد دوباره تلاش کنید.';
         $('payNote').className = 'form-note form-note--warn';
         payBtn.disabled = false;
       }
     } catch (error) {
       payBtn.disabled = false;
       if (error.network) {
-        $('payNote').textContent = 'اتصال به بک‌اند برقرار نشد.';
+        $('payNote').textContent = 'ارتباط با سرور برقرار نشد.';
       } else if (error.status === 400) {
         $('payNote').textContent = `درخواست نامعتبر: ${error.data && error.data.message ? error.data.message : ''}`;
       } else {
-        $('payNote').textContent = 'خطای غیرمنتظره هنگام تسویه حساب.';
+        $('payNote').textContent = 'خطای غیرمنتظره‌ای هنگام تسویه حساب رخ داد.';
       }
       $('payNote').className = 'form-note form-note--error';
     }
@@ -545,6 +551,132 @@
     }
   }
 
+  /* ---------- admin: add a new theater/event ---------- */
+  function defaultAdminRows() {
+    return [
+      { label: 'A', seats: 10, priceMinor: 500000 },
+      { label: 'B', seats: 10, priceMinor: 400000 },
+    ];
+  }
+
+  function renderAdminRows() {
+    const wrap = $('adminRows');
+    wrap.innerHTML = '';
+    state.adminRows.forEach((row, index) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'admin-row';
+      rowEl.innerHTML = `
+        <label>برچسب ردیف
+          <input type="text" data-field="label" data-index="${index}" value="${row.label}">
+        </label>
+        <label>تعداد صندلی
+          <input type="number" min="1" data-field="seats" data-index="${index}" value="${row.seats}">
+        </label>
+        <label>قیمت هر صندلی (ریال)
+          <input type="number" min="1" step="1000" data-field="priceMinor" data-index="${index}" value="${row.priceMinor}">
+        </label>
+        <button type="button" class="admin-row__remove" data-remove="${index}" ${state.adminRows.length <= 1 ? 'disabled' : ''}>حذف</button>
+      `;
+      wrap.appendChild(rowEl);
+    });
+
+    wrap.querySelectorAll('input').forEach((input) => {
+      input.addEventListener('input', () => {
+        const index = Number(input.dataset.index);
+        const field = input.dataset.field;
+        state.adminRows[index][field] = field === 'label' ? input.value : Number(input.value);
+      });
+    });
+    wrap.querySelectorAll('[data-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const index = Number(btn.dataset.remove);
+        if (state.adminRows.length <= 1) return;
+        state.adminRows.splice(index, 1);
+        renderAdminRows();
+      });
+    });
+  }
+
+  function addAdminRow() {
+    const nextLabel = String.fromCharCode(65 + state.adminRows.length); // A, B, C, ...
+    state.adminRows.push({ label: nextLabel, seats: 10, priceMinor: 300000 });
+    renderAdminRows();
+  }
+
+  function resetAdminForm() {
+    $('adminTitle').value = '';
+    $('adminVenue').value = '';
+    $('adminDate').value = '';
+    state.adminRows = defaultAdminRows();
+    renderAdminRows();
+    $('adminNote').textContent = '';
+    $('adminNote').className = 'form-note';
+  }
+
+  async function handleCreateEvent(event) {
+    event.preventDefault();
+    const btn = $('adminSubmitBtn');
+    const note = $('adminNote');
+    const title = $('adminTitle').value.trim();
+    const venue = $('adminVenue').value.trim();
+    const dateLabel = $('adminDate').value.trim();
+
+    if (!title || !venue || !dateLabel) {
+      note.textContent = 'عنوان، مکان و تاریخ الزامی است.';
+      note.className = 'form-note form-note--error';
+      return;
+    }
+    const rows = state.adminRows.map((row) => ({
+      label: (row.label || '').toString().trim(),
+      seats: Number(row.seats),
+      priceMinor: Number(row.priceMinor),
+    }));
+    const rowsAreValid = rows.every((row) => row.label && Number.isInteger(row.seats) && row.seats > 0 &&
+      Number.isInteger(row.priceMinor) && row.priceMinor > 0);
+    if (!rowsAreValid) {
+      note.textContent = 'برای هر ردیف، برچسب، تعداد صندلی و قیمت معتبر لازم است.';
+      note.className = 'form-note form-note--error';
+      return;
+    }
+
+    btn.disabled = true;
+    note.textContent = 'در حال افزودن تئاتر…';
+    note.className = 'form-note';
+    try {
+      const created = await api('POST', '/events', { body: { title, venue, dateLabel, rows } });
+      toast(`«${created.title}» با موفقیت اضافه شد.`, 'ok');
+      resetAdminForm();
+      $('adminForm').hidden = true;
+      await loadEvents();
+      const fresh = state.events.find((e) => e.id === created.id) || created;
+      selectEvent(fresh);
+    } catch (error) {
+      if (error.status === 403) {
+        note.textContent = 'فقط حساب مدیر می‌تواند تئاتر جدید اضافه کند.';
+      } else if (error.status === 400) {
+        note.textContent = `اطلاعات نامعتبر: ${error.data && error.data.message ? error.data.message : ''}`;
+      } else if (error.network) {
+        note.textContent = 'ارتباط با سرور برقرار نشد.';
+      } else {
+        note.textContent = 'خطای غیرمنتظره‌ای رخ داد.';
+      }
+      note.className = 'form-note form-note--error';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function initAdmin() {
+    state.adminRows = defaultAdminRows();
+    renderAdminRows();
+    $('adminToggleBtn').addEventListener('click', () => {
+      const form = $('adminForm');
+      form.hidden = !form.hidden;
+    });
+    $('adminAddRowBtn').addEventListener('click', addAdminRow);
+    $('adminForm').addEventListener('submit', handleCreateEvent);
+  }
+
   /* ---------- restart ---------- */
   function restart() {
     stopCountdown();
@@ -556,7 +688,7 @@
     state.reservation = null;
     $('ticketSection').hidden = true;
     $('seatSection').hidden = true;
-    [...$('eventRow').children].forEach((c) => c.classList.remove('is-active'));
+    renderEvents();
     $('eventSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -564,9 +696,9 @@
   document.addEventListener('DOMContentLoaded', () => {
     initAuth();
     initSettings();
-    renderEvents();
-    checkConnection();
-    setInterval(checkConnection, 15000);
+    initAdmin();
+    loadEvents();
+    setInterval(loadEvents, 8000); // so newly-added theaters show up for everyone without a manual refresh
     switchAuthTab('login');
     $('lockBtn').addEventListener('click', lockSeats);
     $('payBtn').addEventListener('click', payAndIssue);

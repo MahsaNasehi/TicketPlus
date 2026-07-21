@@ -24,24 +24,20 @@
         <span class="user-badge__name" id="userName">—</span>
         <button class="user-badge__logout" id="logoutBtn">خروج</button>
       </div>
-      <button class="gear" id="settingsBtn" title="تنظیمات اتصال به بک‌اند" aria-label="تنظیمات">⚙</button>
-      <div class="conn" id="connIndicator">
-        <span class="conn__dot" id="connDot"></span>
-        <span class="conn__label" id="connLabel">در حال بررسی اتصال…</span>
-      </div>
+      <button class="gear" id="settingsBtn" title="تنظیمات سرور" aria-label="تنظیمات" hidden>⚙</button>
     </div>
   </div>
 </header>
 
 <div class="settings-panel" id="settingsPanel" hidden>
   <div class="settings-panel__row">
-    <label for="apiBaseInput">نشانی پایه‌ی API بک‌اند</label>
+    <label for="apiBaseInput">نشانی پایه‌ی سرور (API)</label>
     <input id="apiBaseInput" type="text" inputmode="url" spellcheck="false" placeholder="http://localhost:8080">
     <button id="apiBaseSave" class="btn btn--gold btn--small">ذخیره</button>
   </div>
   <p class="settings-panel__hint">
-    این فرانت مستقیماً به سرویس مرجع <code>ticketplus.http_api</code> با پروتکل REST متصل می‌شود (رزرو، تسویه، صدور بلیت).
-    اگر بک‌اند را با Docker Compose بالا آورده‌اید، معمولاً <code>http://localhost:8080</code> درست است.
+    این بخش فقط برای حساب مدیر قابل مشاهده است. نشانی زیر همان آدرس سرویس <code>ticketplus.http_api</code> است که رزرو، تسویه و صدور بلیت از طریق آن انجام می‌شود.
+    اگر سرویس را با Docker Compose بالا آورده‌اید، معمولاً <code>http://localhost:8080</code> درست است.
   </p>
 </div>
 
@@ -88,6 +84,33 @@
 
   <!-- Everything below only exists once the user is logged in -->
   <div id="appMain" hidden>
+
+  <!-- Admin-only: add a new theater/event to the catalog -->
+  <section class="section" id="adminSection" hidden>
+    <h2 class="section__title"><span class="section__eyebrow">ADMIN</span>پنل مدیریت</h2>
+    <button class="btn btn--ghost btn--small" id="adminToggleBtn" type="button">افزودن تئاتر جدید</button>
+
+    <form class="admin-form" id="adminForm" hidden>
+      <div class="admin-form__grid">
+        <label>عنوان نمایش/تئاتر
+          <input type="text" id="adminTitle" required>
+        </label>
+        <label>مکان
+          <input type="text" id="adminVenue" required>
+        </label>
+        <label>تاریخ و ساعت
+          <input type="text" id="adminDate" required placeholder="مثلاً جمعه ۱۴ شهریور — ساعت ۲۰:۰۰">
+        </label>
+      </div>
+
+      <h3 class="admin-form__subtitle">ردیف‌های صندلی و قیمت هر ردیف</h3>
+      <div class="admin-rows" id="adminRows"></div>
+      <button class="btn btn--ghost btn--small" id="adminAddRowBtn" type="button">+ افزودن ردیف</button>
+
+      <button class="btn btn--gold btn--block" id="adminSubmitBtn" type="submit">افزودن تئاتر و شروع رزرو</button>
+      <p class="form-note" id="adminNote"></p>
+    </form>
+  </section>
 
   <!-- Step 1: event picker -->
   <section class="section" id="eventSection">
@@ -136,7 +159,7 @@
           <span class="countdown" id="countdown">۱۰:۰۰</span>
         </div>
         <p class="form-note form-note--warn">
-          طبق قرارداد بک‌اند، امکان لغو دستی رزرو از این واسط وجود ندارد؛ اگر تا پایان مهلت تسویه نکنید، صندلی‌ها خودکار آزاد می‌شوند.
+          طبق قوانین سیستم، امکان لغو دستی رزرو از این واسط وجود ندارد؛ اگر تا پایان مهلت تسویه نکنید، صندلی‌ها خودکار آزاد می‌شوند.
         </p>
 
         <hr class="divider">
