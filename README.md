@@ -20,11 +20,14 @@ and a plain HTML/CSS/JS frontend.
   (default `user`); `require_admin()` gates admin-only endpoints. Not
   intended for real production use (no rate limiting, no email
   verification, no password reset).
-- `src/ticketplus/catalog.py` — event (theater/show) catalog. Creating an
-  event is restricted to `admin` accounts and requires a price strictly
-  greater than 100,000 Toman; no other constraint is placed on price or on
-  the rest of the event fields. Backed by its own `events` table in the
-  same SQLite database.
+- `src/ticketplus/catalog.py` — event (theater/show) catalog. An event has
+  a `title`, `venue`, `dateLabel`, and one or more seating `rows` (each
+  with a `label`, `seats` count, and a per-seat `priceMinor` in Rial —
+  seats are priced per row, not per event). Creating an event is
+  restricted to `admin` accounts and requires every row's per-seat price
+  to be strictly greater than 100,000 Toman (1 Toman == 10 Rial); no other
+  constraint is placed on price or on the rest of the event fields. Backed
+  by its own `events`/`event_rows` tables in the same SQLite database.
 - `src/ticketplus/reservation.py` — seat-locking aggregate backed by SQLite.
   A unique index on `(event_id, seat_id)` in `reservation_seats` is what
   guarantees no two customers can lock the same seat, even under concurrent
@@ -53,11 +56,11 @@ and a plain HTML/CSS/JS frontend.
 | Method | Path                              | Notes                                   |
 |--------|-----------------------------------|------------------------------------------|
 | GET    | `/health/live`, `/health/ready`   | `{"status": "UP"}`                      |
-| POST   | `/auth/register`                  | `{email, password, name, role?}` → token, user |
+| POST   | `/auth/register`                  | `{email, password, name, role?}` → token, user (`role` defaults to `user`; send `role: "admin"` to bootstrap the first admin) |
 | POST   | `/auth/login`                     | `{email, password}` → token, user       |
 | GET    | `/auth/me`                        | `Authorization: Bearer <token>`         |
-| GET    | `/events`                         | List all events in the catalog          |
-| POST   | `/events`                         | **Admin only.** `{title, priceToman}`, `priceToman` must be > 100,000. Returns `403` for non-admins, `401` if unauthenticated, `400` for an invalid price |
+| GET    | `/events`                         | `{events: [...]}` — each event is `{id, title, venue, dateLabel, rows: [{label, seats, priceMinor}, ...], createdAt}` |
+| POST   | `/events`                         | **Admin only.** `{title, venue, dateLabel, rows: [{label, seats, priceMinor}, ...]}`. `priceMinor` is Rial, per seat, and must be > 1,000,000 (i.e. > 100,000 Toman) on every row. Returns `403` for non-admins, `401` if unauthenticated, `400` for an invalid/underpriced row |
 | GET    | `/events/{eventId}/seats`         | `{locked: [...], booked: [...]}`        |
 | POST   | `/reservations`                   | Requires `Idempotency-Key` (≥8 chars)   |
 | GET    | `/reservations/{id}`              |                                          |
@@ -147,15 +150,23 @@ python3 quality/mutation/run.py
   payment provider is integrated.
 - Roles are limited to `user`/`admin`; the `ORGANIZER` role from the full
   design docs is not implemented here.
-- **Frontend/backend payload mismatch for event creation:** the admin
-  "add theater" form in `frontend/app.js` (`handleCreateEvent`) currently
-  submits `{title, venue, dateLabel, rows: [{label, seats, priceMinor}, ...]}`
-  — a per-row, per-seat price in Rial — while `POST /events` on the backend
-  only accepts `{title, priceToman}`. Until these are reconciled, the admin
-  panel will fail against the real backend with a `400` response. Fixing
-  this requires deciding, and implementing, whether the "price must exceed
-  100,000 Toman" rule applies per seat/row or to some derived event-level
-  price.
+- **Resolved:** the admin "add theater" form in `frontend/app.js`
+  (`handleCreateEvent`) submits `{title, venue, dateLabel, rows: [{label,
+  seats, priceMinor}, ...]}` (a per-row, per-seat price in Rial).
+  `catalog.py`/`POST /events` now accept exactly this shape instead of the
+  old `{title, priceToman}`. The "price must exceed 100,000 Toman" rule is
+  enforced on every row's per-seat price — equivalent to enforcing it on
+  the derived minimum across rows, but this reports which specific row
+  failed. `GET /events` was also changed to return `{events: [...]}`,
+  since that's the shape `loadEvents()` in the frontend already expected
+  (it was previously returning a bare array, so the event list silently
+  rendered empty).
+- **Fixed alongside the above:** `POST /auth/register` was silently
+  dropping the `role` field from the request body, so the "create the
+  first admin" bootstrap step in this README never actually worked —
+  every registered account was forced to `role: "user"` regardless of
+  what was sent, and the admin panel was unreachable. It now passes
+  `role` through to `AuthService.register()`.
 - `catalog.py`/`auth.py` are new additions and are not yet covered by the
   `quality/coverage` and `quality/mutation` runs whose last recorded
   results are in the design report.
