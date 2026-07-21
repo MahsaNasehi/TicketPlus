@@ -11,7 +11,8 @@ from urllib.parse import urlparse
 from .auth import AuthService, EmailAlreadyRegistered, InvalidCredentials
 from .checkout import CheckoutService, NotificationService, PaymentResult, TicketingService
 from .events import EventBus
-from .reservation import LockConflict, ReservationService
+# اضافه کردن ReservationNotFound برای مدیریت خطای عدم وجود رزرویشن
+from .reservation import LockConflict, ReservationService, ReservationNotFound
 
 
 bus = EventBus()
@@ -55,30 +56,40 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
-        if path in {"/health/live", "/health/ready"}:
-            self._json(HTTPStatus.OK, {"status": "UP"})
-            return
-        if path == "/auth/me":
-            try:
-                user = auth.user_from_auth_header(self.headers.get("Authorization"))
-                self._json(HTTPStatus.OK, {"user": user})
-            except InvalidCredentials as error:
-                self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
-            return
-        if path.startswith("/events/") and path.endswith("/seats"):
-            event_id = path.split("/")[2]
-            self._json(HTTPStatus.OK, reservations.seat_statuses(event_id))
-            return
-        if path.startswith("/reservations/"):
-            self._json(HTTPStatus.OK, reservations.get(path.rsplit("/", 1)[-1]))
-            return
-        if path.startswith("/tickets/by-reservation/"):
-            reservation_id = path.rsplit("/", 1)[-1]
-            ticket = ticketing.tickets.get(reservation_id)
-            self._json(HTTPStatus.OK if ticket else HTTPStatus.NOT_FOUND, ticket or {"error": "not_found"})
-            return
-        self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+        try:
+            path = urlparse(self.path).path
+            if path in {"/health/live", "/health/ready"}:
+                self._json(HTTPStatus.OK, {"status": "UP"})
+                return
+            if path == "/auth/me":
+                try:
+                    user = auth.user_from_auth_header(self.headers.get("Authorization"))
+                    self._json(HTTPStatus.OK, {"user": user})
+                except InvalidCredentials as error:
+                    self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
+                return
+            if path.startswith("/events/") and path.endswith("/seats"):
+                event_id = path.split("/")[2]
+                self._json(HTTPStatus.OK, reservations.seat_statuses(event_id))
+                return
+            if path.startswith("/reservations/"):
+                reservation_id = path.rsplit("/", 1)[-1]
+                self._json(HTTPStatus.OK, reservations.get(reservation_id))
+                return
+            if path.startswith("/tickets/by-reservation/"):
+                reservation_id = path.rsplit("/", 1)[-1]
+                ticket = ticketing.tickets.get(reservation_id)
+                self._json(HTTPStatus.OK if ticket else HTTPStatus.NOT_FOUND, ticket or {"error": "not_found"})
+                return
+            self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+        except ReservationNotFound as error:
+            # مدیریت خطای عدم وجود رزرویشن با بازگرداندن پاسخ ۴۰۴
+            self._json(HTTPStatus.NOT_FOUND, {"error": "reservation_not_found", "message": str(error)})
+        except InvalidCredentials as error:
+            self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
+        except Exception as error:
+            # مدیریت سایر خطاهای پیش‌بینی نشده برای جلوگیری از کرش کردن ورکر
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal_error", "message": str(error)})
 
     def do_POST(self) -> None:
         try:
