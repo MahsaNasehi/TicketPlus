@@ -579,7 +579,7 @@
           <input type="number" min="1" data-field="seats" data-index="${index}" value="${row.seats}">
         </label>
         <label>قیمت هر صندلی (ریال) — حداقل ۱۰۰٬۰۰۱
-          <input type="number" min="100001" step="1000" data-field="priceMinor" data-index="${index}" value="${row.priceMinor}">
+          <input type="number" min="10000" step="1" data-field="priceMinor" data-index="${index}" value="${row.priceMinor}">
         </label>
         <button type="button" class="admin-row__remove" data-remove="${index}" ${state.adminRows.length <= 1 ? 'disabled' : ''}>حذف</button>
       `;
