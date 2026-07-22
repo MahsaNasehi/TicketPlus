@@ -11,7 +11,9 @@
     selectedSeats: new Set(),
     lockedSeats: new Set(),  // PENDING on the server, owned by someone else (or us, before/after our own lock)
     bookedSeats: new Set(),  // CONFIRMED on the server — permanently sold
-    reservation: null,
+    reservation: null, // the reservation for state.activeEvent, if any (mirrors reservationsByEvent[activeEvent.id])
+    reservationsByEvent: {}, // eventId -> reservation, kept for every event the user has locked seats on,
+                              // so leaving a theater and coming back still shows the pending reservation
     countdownTimer: null,
     seatPollTimer: null,
     adminRows: [], // draft seating rows while the admin is composing a new/edited event
@@ -67,10 +69,56 @@
     try { return JSON.parse(raw); } catch (_) { return null; }
   }
 
+  // Pending reservations are kept per user so that leaving a theater, browsing
+  // another one, and coming back still shows the seats you locked earlier
+  // (even across a page refresh) -- as long as they haven't expired.
+  function reservationsStorageKey(userId) {
+    return userId ? `ticketplus.reservations.${userId}` : null;
+  }
+
+  function loadReservationsByEvent(userId) {
+    const key = reservationsStorageKey(userId);
+    if (!key) return {};
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || '{}');
+      const now = Date.now();
+      // Drop anything that has already expired so it doesn't resurrect a dead reservation.
+      Object.keys(stored).forEach((eventId) => {
+        if (new Date(stored[eventId].expiresAt).getTime() <= now) delete stored[eventId];
+      });
+      return stored;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveReservationsByEvent() {
+    const key = reservationsStorageKey(state.auth && state.auth.user && state.auth.user.id);
+    if (!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(state.reservationsByEvent));
+    } catch (_) { /* ignore quota errors */ }
+  }
+
+  function rememberReservation(eventId, reservation) {
+    state.reservationsByEvent[eventId] = reservation;
+    saveReservationsByEvent();
+  }
+
+  function forgetReservation(eventId) {
+    delete state.reservationsByEvent[eventId];
+    saveReservationsByEvent();
+  }
+
   function saveAuth(auth) {
     state.auth = auth;
-    if (auth) localStorage.setItem('ticketplus.auth', JSON.stringify(auth));
-    else localStorage.removeItem('ticketplus.auth');
+    if (auth) {
+      localStorage.setItem('ticketplus.auth', JSON.stringify(auth));
+      state.reservationsByEvent = loadReservationsByEvent(auth.user && auth.user.id);
+    } else {
+      localStorage.removeItem('ticketplus.auth');
+      state.reservationsByEvent = {};
+    }
     updateAuthUI();
   }
 
@@ -191,6 +239,7 @@
 
   function initAuth() {
     state.auth = loadAuth();
+    state.reservationsByEvent = loadReservationsByEvent(state.auth && state.auth.user && state.auth.user.id);
     updateAuthUI();
     $('tabLogin').addEventListener('click', () => switchAuthTab('login'));
     $('tabRegister').addEventListener('click', () => switchAuthTab('register'));
@@ -274,23 +323,43 @@
 
   function selectEvent(event) {
     state.activeEvent = event;
-    state.selectedSeats.clear();
-    state.lockedSeats.clear();
     state.bookedSeats.clear();
-    state.reservation = null;
     stopCountdown();
+
+    const existing = state.reservationsByEvent[event.id];
+    const stillValid = existing && new Date(existing.expiresAt).getTime() > Date.now();
 
     renderEvents();
 
     $('seatSection').hidden = false;
     $('ticketSection').hidden = true;
-    $('reservationBox').hidden = true;
-    $('lockBtn').hidden = false;
-    $('lockBtn').disabled = true;
-    $('lockNote').textContent = '';
-    $('payBtn').disabled = false;
     $('payNote').textContent = '';
     $('payNote').className = 'form-note';
+
+    if (stillValid) {
+      // The user locked these seats earlier (maybe on this exact screen, maybe
+      // before browsing off to another theater) -- restore the in-progress
+      // checkout instead of throwing it away.
+      state.reservation = existing;
+      state.selectedSeats = new Set(existing.seatIds);
+      state.lockedSeats = new Set(existing.seatIds);
+      $('lockBtn').hidden = true;
+      $('reservationBox').hidden = false;
+      $('payBtn').disabled = false;
+      $('lockNote').textContent = '';
+      $('reservationId').textContent = existing.id;
+      startCountdown(existing.expiresAt);
+    } else {
+      if (existing) forgetReservation(event.id); // it had expired
+      state.reservation = null;
+      state.selectedSeats.clear();
+      state.lockedSeats.clear();
+      $('reservationBox').hidden = true;
+      $('lockBtn').hidden = false;
+      $('lockBtn').disabled = true;
+      $('lockNote').textContent = '';
+    }
+
     renderSeatMap();
     renderSelection();
     refreshSeatStatus();
@@ -408,6 +477,7 @@
         idemKey: idempotencyKey('reserve'),
       });
       state.reservation = reservation;
+      rememberReservation(state.activeEvent.id, reservation);
       state.lockedSeats = new Set([...state.lockedSeats, ...seats]);
       $('lockNote').textContent = '';
       $('lockBtn').hidden = true;
@@ -470,6 +540,7 @@
 
   function onReservationExpired() {
     toast('مهلت رزرو به پایان رسید و صندلی‌ها آزاد شدند. لطفاً دوباره انتخاب کنید.', 'error');
+    if (state.activeEvent) forgetReservation(state.activeEvent.id);
     state.reservation = null;
     state.selectedSeats.clear();
     $('reservationBox').hidden = true;
@@ -498,12 +569,14 @@
       if (attempt.status === 'SUCCEEDED') {
         stopCountdown();
         stopSeatPolling();
+        if (state.activeEvent) forgetReservation(state.activeEvent.id);
         const ticket = await api('GET', `/tickets/by-reservation/${state.reservation.id}`);
         showTicket(ticket);
       } else if (attempt.status === 'FAILED') {
         $('payNote').textContent = 'پرداخت ناموفق بود؛ صندلی‌ها آزاد شدند. لطفاً دوباره از ابتدا رزرو کنید.';
         $('payNote').className = 'form-note form-note--error';
         stopCountdown();
+        if (state.activeEvent) forgetReservation(state.activeEvent.id);
         state.reservation = null;
         state.selectedSeats.clear();
         $('reservationBox').hidden = true;

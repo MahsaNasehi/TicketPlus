@@ -53,7 +53,11 @@ and a plain HTML/CSS/JS frontend.
   that reopens the form pre-filled, calling `PUT /events/{id}`) plus the
   "add a new theater" form — and never sees the customer booking flow; a
   plain `user` sees the event list and seat/checkout flow and never sees
-  the admin panel.
+  the admin panel. A user's pending (locked, unpaid) reservation is kept
+  per theater (`localStorage`, keyed by user id): browsing away to a
+  different theater and coming back restores the locked seats, countdown,
+  and "pay now" button exactly as they were, as long as the reservation
+  hasn't expired — the same applies across a page refresh.
 - `db/migrations/`, `contracts/openapi/`, `diagrams/` /
   `rendered diagrams/`, `docs/`, `infra/terraform/`, `reports/` — schema
   migrations, API contracts, architecture diagrams, written documentation,
