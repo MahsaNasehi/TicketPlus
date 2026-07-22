@@ -169,7 +169,7 @@ python3 quality/mutation/run.py
   payment provider is integrated.
 - Roles are limited to `user`/`admin`; the `ORGANIZER` role from the full
   design docs is not implemented here.
-- The "price must exceed 100,000" rule is enforced per seating row
+- The "price must exceed 10,000" rule is enforced per seating row
   (`priceMinor`), since that's the level at which price actually varies in
   this reference implementation — there is no separate event-level price.
 - `catalog.py`/`auth.py` are new additions and are not yet covered by the
