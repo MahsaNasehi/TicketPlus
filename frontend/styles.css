@@ -284,3 +284,35 @@ body{
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001ms !important; transition-duration:.001ms !important;}
 }
+
+/* ---------- admin panel ---------- */
+.admin-form__subtitle{font-size:.95rem; color:var(--text-hi); margin:18px 0 10px;}
+.admin-form{display:flex; flex-direction:column; gap:6px; margin-top:16px; padding:18px; background:var(--curtain); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius);}
+.admin-form__grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;}
+.admin-form label{font-size:.82rem; color:var(--text-mid); display:flex; flex-direction:column; gap:5px;}
+.admin-form input{
+  background:var(--ink); border:1px solid rgba(255,255,255,0.14); border-radius:8px;
+  color:var(--text-hi); padding:9px 11px; font:inherit;
+}
+.admin-form input:focus{outline:2px solid var(--gold); outline-offset:1px;}
+.admin-rows{display:flex; flex-direction:column; gap:10px;}
+.admin-row{display:grid; grid-template-columns:1fr 1fr 1.4fr auto; gap:10px; align-items:end; padding:10px; background:var(--curtain-2); border-radius:10px;}
+.admin-row label{font-size:.78rem; color:var(--text-mid); display:flex; flex-direction:column; gap:5px;}
+.admin-row input{background:var(--ink); border:1px solid rgba(255,255,255,0.14); border-radius:8px; color:var(--text-hi); padding:8px 10px; font:inherit;}
+.admin-row__remove{background:transparent; border:1px solid rgba(193,71,61,0.4); color:var(--sold); border-radius:8px; padding:8px 12px; cursor:pointer; height:fit-content;}
+.admin-row__remove:disabled{opacity:.35; cursor:not-allowed;}
+
+.admin-events{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
+.admin-events__empty{color:var(--text-low); font-size:.85rem;}
+.admin-event-card{
+  display:flex; justify-content:space-between; align-items:center; gap:14px;
+  background:var(--curtain); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 16px;
+}
+.admin-event-card__info{display:flex; flex-direction:column; gap:2px;}
+.admin-event-card__title{font-weight:700; color:var(--text-hi);}
+.admin-event-card__meta{font-size:.78rem; color:var(--text-low);}
+.admin-event-card__edit{
+  background:transparent; border:1px solid var(--gold); color:var(--gold); border-radius:8px;
+  padding:7px 14px; font-size:.82rem; cursor:pointer; white-space:nowrap;
+}
+.admin-event-card__edit:hover{background:rgba(231,178,60,0.12);}

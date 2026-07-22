@@ -24,12 +24,13 @@ and a plain HTML/CSS/JS frontend.
   limiting, no email verification, no password reset).
 - `src/ticketplus/catalog.py` — event (theater/show) catalog. An event has a
   `title`, `venue`, `dateLabel`, and one or more seating `rows` (each with a
-  `label`, a seat count, and a per-seat `priceMinor`). Creating an event is
-  restricted to `admin` accounts and requires every row's price to be
-  strictly greater than 100,000; no other constraint is placed on price or
-  on the rest of the event fields. Backed by its own `events` table in the
-  same SQLite database. A fresh catalog is seeded with a few demo
-  theaters/concerts so the event list is never empty out of the box.
+  `label`, a seat count, and a per-seat `priceMinor`). Creating or editing
+  an event (`create_event`/`update_event`) is restricted to `admin`
+  accounts and requires every row's price to be strictly greater than
+  100,000; no other constraint is placed on price or on the rest of the
+  event fields. Backed by its own `events` table in the same SQLite
+  database. A fresh catalog is seeded with a few demo theaters/concerts so
+  the event list is never empty out of the box.
 - `src/ticketplus/reservation.py` — seat-locking aggregate backed by SQLite.
   A unique index on `(event_id, seat_id)` in `reservation_seats` is what
   guarantees no two customers can lock the same seat, even under concurrent
@@ -47,9 +48,12 @@ and a plain HTML/CSS/JS frontend.
 - `frontend/` — vanilla HTML/CSS/JS client (`index.html`, `app.js`,
   `styles.css`) served as static files. The account's `role` (from
   `/auth/login` or `/auth/register`, not a hardcoded email) decides what a
-  logged-in user sees: an `admin` lands directly on the "add a new theater"
-  panel and never sees the customer booking flow; a plain `user` sees the
-  event list and seat/checkout flow and never sees the admin panel.
+  logged-in user sees: an `admin` lands directly on the admin panel — a
+  list of every existing theater/concert (with an "edit" button per event
+  that reopens the form pre-filled, calling `PUT /events/{id}`) plus the
+  "add a new theater" form — and never sees the customer booking flow; a
+  plain `user` sees the event list and seat/checkout flow and never sees
+  the admin panel.
 - `db/migrations/`, `contracts/openapi/`, `diagrams/` /
   `rendered diagrams/`, `docs/`, `infra/terraform/`, `reports/` — schema
   migrations, API contracts, architecture diagrams, written documentation,
@@ -66,6 +70,7 @@ and a plain HTML/CSS/JS frontend.
 | GET    | `/auth/me`                        | `Authorization: Bearer <token>`         |
 | GET    | `/events`                         | `{events: [...]}` — every event in the catalog (seeded with a few demo theaters/concerts by default) |
 | POST   | `/events`                         | **Admin only.** `{title, venue, dateLabel, rows: [{label, seats, priceMinor}, ...]}`; every row's `priceMinor` must be > 100,000. Returns `403` for non-admins, `401` if unauthenticated, `400` for invalid data |
+| PUT    | `/events/{eventId}`                | **Admin only.** Same body shape as `POST /events`; overwrites the event in place (id/createdAt kept). `403`/`401` as above, `404` if the id doesn't exist, `400` for invalid data |
 | GET    | `/events/{eventId}/seats`         | `{locked: [...], booked: [...]}`        |
 | POST   | `/reservations`                   | Requires `Idempotency-Key` (≥8 chars)   |
 | GET    | `/reservations/{id}`              |                                          |
@@ -134,10 +139,12 @@ update the API base URL in `frontend/app.js` accordingly.
 ### 5. Open the app
 
 Go to <http://127.0.0.1:5500> in your browser. Log in with the admin
-account above and you're taken straight to the "add a new theater" panel
-(admins never see the customer booking flow). Register a normal account
-instead (no `role` field) to see the event list and go through booking a
-seat and checking out as a regular user.
+account above and you're taken straight to the admin panel: a list of every
+existing theater/concert (each with an "ویرایش"/edit button that reopens
+the form pre-filled with that event's data) plus the "add a new theater"
+form below it — admins never see the customer booking flow. Register a
+normal account instead (no `role` field) to see the event list and go
+through booking a seat and checking out as a regular user.
 
 ## Tests
 

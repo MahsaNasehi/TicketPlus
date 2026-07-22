@@ -14,7 +14,8 @@
     reservation: null,
     countdownTimer: null,
     seatPollTimer: null,
-    adminRows: [], // draft seating rows while the admin is composing a new event
+    adminRows: [], // draft seating rows while the admin is composing a new/edited event
+    editingEventId: null, // null = "add new theater" mode, otherwise the id being edited
   };
 
   /* ---------- helpers ---------- */
@@ -220,6 +221,7 @@
       const data = await api('GET', '/events');
       state.events = data.events || [];
       renderEvents();
+      renderAdminEventList();
     } catch (_) {
       // keep showing whichever list we already had; individual actions surface their own errors
     }
@@ -557,7 +559,64 @@
     }
   }
 
-  /* ---------- admin: add a new theater/event ---------- */
+  /* ---------- admin: existing events list (view + edit) ---------- */
+  function renderAdminEventList() {
+    const wrap = $('adminEventList');
+    if (!wrap || !isAdmin()) return;
+    wrap.innerHTML = '';
+    if (!state.events.length) {
+      wrap.innerHTML = '<p class="admin-events__empty">هنوز هیچ تئاتری اضافه نشده است.</p>';
+      return;
+    }
+    state.events.forEach((ev) => {
+      const rowsSummary = (ev.rows || [])
+        .map((row) => `${row.label} (${row.seats} صندلی، ${fa.format(row.priceMinor)} ریال)`)
+        .join(' · ');
+      const card = document.createElement('div');
+      card.className = 'admin-event-card';
+      card.innerHTML = `
+        <div class="admin-event-card__info">
+          <span class="admin-event-card__title">${ev.title}</span>
+          <span class="admin-event-card__meta">${ev.venue} — ${ev.dateLabel}</span>
+          <span class="admin-event-card__meta">${rowsSummary}</span>
+        </div>
+        <button type="button" class="admin-event-card__edit" data-edit-id="${ev.id}">ویرایش</button>
+      `;
+      wrap.appendChild(card);
+    });
+    wrap.querySelectorAll('[data-edit-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const ev = state.events.find((e) => e.id === btn.dataset.editId);
+        if (ev) startEditEvent(ev);
+      });
+    });
+  }
+
+  function startEditEvent(ev) {
+    state.editingEventId = ev.id;
+    $('adminTitle').value = ev.title;
+    $('adminVenue').value = ev.venue;
+    $('adminDate').value = ev.dateLabel;
+    state.adminRows = (ev.rows || []).map((row) => ({ ...row }));
+    renderAdminRows();
+    $('adminFormTitle').textContent = `ویرایش «${ev.title}»`;
+    $('adminSubmitBtn').textContent = 'ذخیره تغییرات';
+    $('adminCancelEditBtn').hidden = false;
+    $('adminForm').hidden = false;
+    $('adminNote').textContent = '';
+    $('adminNote').className = 'form-note';
+    $('adminForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelEdit() {
+    state.editingEventId = null;
+    $('adminFormTitle').textContent = 'افزودن تئاتر جدید';
+    $('adminSubmitBtn').textContent = 'افزودن تئاتر و شروع رزرو';
+    $('adminCancelEditBtn').hidden = true;
+    resetAdminForm();
+  }
+
+  /* ---------- admin: add/edit a theater/event ---------- */
   function defaultAdminRows() {
     return [
       { label: 'A', seats: 10, priceMinor: 500000 },
@@ -579,7 +638,7 @@
           <input type="number" min="1" data-field="seats" data-index="${index}" value="${row.seats}">
         </label>
         <label>قیمت هر صندلی (ریال) — حداقل ۱۰۰٬۰۰۱
-          <input type="number" min="10000" step="1" data-field="priceMinor" data-index="${index}" value="${row.priceMinor}">
+          <input type="number" min="100001" step="1" data-field="priceMinor" data-index="${index}" value="${row.priceMinor}">
         </label>
         <button type="button" class="admin-row__remove" data-remove="${index}" ${state.adminRows.length <= 1 ? 'disabled' : ''}>حذف</button>
       `;
@@ -619,7 +678,7 @@
     $('adminNote').className = 'form-note';
   }
 
-  async function handleCreateEvent(event) {
+  async function handleSaveEvent(event) {
     event.preventDefault();
     const btn = $('adminSubmitBtn');
     const note = $('adminNote');
@@ -645,20 +704,23 @@
       return;
     }
 
+    const isEditing = !!state.editingEventId;
     btn.disabled = true;
-    note.textContent = 'در حال افزودن تئاتر…';
+    note.textContent = isEditing ? 'در حال ذخیره تغییرات…' : 'در حال افزودن تئاتر…';
     note.className = 'form-note';
     try {
-      const created = await api('POST', '/events', { body: { title, venue, dateLabel, rows } });
-      toast(`«${created.title}» با موفقیت اضافه شد.`, 'ok');
-      resetAdminForm();
+      const saved = isEditing
+        ? await api('PUT', `/events/${state.editingEventId}`, { body: { title, venue, dateLabel, rows } })
+        : await api('POST', '/events', { body: { title, venue, dateLabel, rows } });
+      toast(isEditing ? `«${saved.title}» به‌روزرسانی شد.` : `«${saved.title}» با موفقیت اضافه شد.`, 'ok');
+      cancelEdit();
       $('adminForm').hidden = true;
       await loadEvents();
-      const fresh = state.events.find((e) => e.id === created.id) || created;
-      selectEvent(fresh);
     } catch (error) {
       if (error.status === 403) {
-        note.textContent = 'فقط حساب مدیر می‌تواند تئاتر جدید اضافه کند.';
+        note.textContent = 'فقط حساب مدیر می‌تواند تئاتر اضافه یا ویرایش کند.';
+      } else if (error.status === 404) {
+        note.textContent = 'این تئاتر دیگر وجود ندارد؛ ممکن است حذف شده باشد.';
       } else if (error.status === 400) {
         note.textContent = `اطلاعات نامعتبر: ${error.data && error.data.message ? error.data.message : ''}`;
       } else if (error.network) {
@@ -677,10 +739,16 @@
     renderAdminRows();
     $('adminToggleBtn').addEventListener('click', () => {
       const form = $('adminForm');
-      form.hidden = !form.hidden;
+      const wasOpenInCreateMode = !form.hidden && !state.editingEventId;
+      cancelEdit();
+      form.hidden = wasOpenInCreateMode;
+    });
+    $('adminCancelEditBtn').addEventListener('click', () => {
+      cancelEdit();
+      $('adminForm').hidden = true;
     });
     $('adminAddRowBtn').addEventListener('click', addAdminRow);
-    $('adminForm').addEventListener('submit', handleCreateEvent);
+    $('adminForm').addEventListener('submit', handleSaveEvent);
   }
 
   /* ---------- restart ---------- */

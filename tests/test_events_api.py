@@ -119,6 +119,66 @@ class EventsApiTests(unittest.TestCase):
         )
         self.assertEqual(400, status)
 
+    def test_admin_can_edit_an_existing_event(self):
+        token, _ = self.register("admin-edit-test@example.com", role="admin")
+        _, created = self.request(
+            "POST",
+            "/events",
+            {
+                "title": "Original",
+                "venue": "Original Hall",
+                "dateLabel": "Mon",
+                "rows": [{"label": "A", "seats": 5, "priceMinor": 150_000}],
+            },
+            token=token,
+        )
+        status, updated = self.request(
+            "PUT",
+            f"/events/{created['id']}",
+            {
+                "title": "Updated",
+                "venue": "Updated Hall",
+                "dateLabel": "Tue",
+                "rows": [{"label": "A", "seats": 7, "priceMinor": 175_000}],
+            },
+            token=token,
+        )
+        self.assertEqual(200, status, updated)
+        self.assertEqual(updated["id"], created["id"])
+        self.assertEqual(updated["title"], "Updated")
+        self.assertEqual(updated["venue"], "Updated Hall")
+
+        status, listed = self.request("GET", "/events")
+        edited = next(e for e in listed["events"] if e["id"] == created["id"])
+        self.assertEqual(edited["title"], "Updated")
+
+    def test_non_admin_cannot_edit_an_event(self):
+        admin_token, _ = self.register("admin-edit-guard-test@example.com", role="admin")
+        _, created = self.request(
+            "POST",
+            "/events",
+            {"title": "T", "venue": "V", "dateLabel": "D", "rows": [{"label": "A", "seats": 1, "priceMinor": 200_000}]},
+            token=admin_token,
+        )
+        user_token, _ = self.register("user-edit-guard-test@example.com")
+        status, _ = self.request(
+            "PUT",
+            f"/events/{created['id']}",
+            {"title": "Hacked", "venue": "V", "dateLabel": "D", "rows": [{"label": "A", "seats": 1, "priceMinor": 200_000}]},
+            token=user_token,
+        )
+        self.assertEqual(403, status)
+
+    def test_editing_a_missing_event_returns_404(self):
+        token, _ = self.register("admin-edit-missing-test@example.com", role="admin")
+        status, _ = self.request(
+            "PUT",
+            "/events/does-not-exist",
+            {"title": "T", "venue": "V", "dateLabel": "D", "rows": [{"label": "A", "seats": 1, "priceMinor": 200_000}]},
+            token=token,
+        )
+        self.assertEqual(404, status)
+
 
 if __name__ == "__main__":
     unittest.main()

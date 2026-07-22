@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .auth import AuthService, EmailAlreadyRegistered, InvalidCredentials, NotAuthorized
-from .catalog import EventCatalog, InvalidEvent
+from .catalog import EventCatalog, EventNotFound, InvalidEvent
 from .checkout import CheckoutService, NotificationService, PaymentResult, TicketingService
 from .events import EventBus
 # اضافه کردن ReservationNotFound برای مدیریت خطای عدم وجود رزرویشن
@@ -35,7 +35,7 @@ notifications = NotificationService(bus)
 class Handler(BaseHTTPRequestHandler):
     def _cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, Authorization")
 
     def _json(self, status: int, payload: object) -> None:
@@ -90,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
         except ReservationNotFound as error:
             # مدیریت خطای عدم وجود رزرویشن با بازگرداندن پاسخ ۴۰۴
             self._json(HTTPStatus.NOT_FOUND, {"error": "reservation_not_found", "message": str(error)})
-        except InvalidEvent as error:
+        except EventNotFound as error:
             self._json(HTTPStatus.NOT_FOUND, {"error": "event_not_found", "message": str(error)})
         except InvalidCredentials as error:
             self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized", "message": str(error)})
@@ -166,6 +166,36 @@ class Handler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_request", "message": str(error)})
         except Exception as error:
             self._json(HTTPStatus.CONFLICT, {"error": type(error).__name__, "message": str(error)})
+
+    def do_PUT(self) -> None:
+        try:
+            path = urlparse(self.path).path
+            body = self._body()
+            if path.startswith("/events/"):
+                auth.require_admin(self.headers.get("Authorization"))
+                event_id = path.rsplit("/", 1)[-1]
+                event = catalog.update_event(
+                    event_id,
+                    body.get("title", ""),
+                    body.get("venue", ""),
+                    body.get("dateLabel", ""),
+                    body.get("rows", []),
+                )
+                self._json(HTTPStatus.OK, event)
+                return
+            self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+        except NotAuthorized as error:
+            self._json(HTTPStatus.FORBIDDEN, {"error": "forbidden", "message": str(error)})
+        except InvalidCredentials as error:
+            self._json(HTTPStatus.UNAUTHORIZED, {"error": "invalid_credentials", "message": str(error)})
+        except EventNotFound as error:
+            self._json(HTTPStatus.NOT_FOUND, {"error": "event_not_found", "message": str(error)})
+        except InvalidEvent as error:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_event", "message": str(error)})
+        except (KeyError, ValueError) as error:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_request", "message": str(error)})
+        except Exception as error:
+            self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": type(error).__name__, "message": str(error)})
 
     def log_message(self, format: str, *args) -> None:
         print(json.dumps({"message": format % args}))

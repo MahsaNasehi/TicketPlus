@@ -88,9 +88,14 @@
   <!-- Admin-only: add a new theater/event to the catalog -->
   <section class="section" id="adminSection" hidden>
     <h2 class="section__title"><span class="section__eyebrow">ADMIN</span>پنل مدیریت</h2>
+
+    <h3 class="admin-form__subtitle">تئاترهای موجود</h3>
+    <div class="admin-events" id="adminEventList"></div>
+
     <button class="btn btn--ghost btn--small" id="adminToggleBtn" type="button">افزودن تئاتر جدید</button>
 
     <form class="admin-form" id="adminForm" hidden>
+      <h3 class="admin-form__subtitle" id="adminFormTitle">افزودن تئاتر جدید</h3>
       <div class="admin-form__grid">
         <label>عنوان نمایش/تئاتر
           <input type="text" id="adminTitle" required>
@@ -108,6 +113,7 @@
       <button class="btn btn--ghost btn--small" id="adminAddRowBtn" type="button">+ افزودن ردیف</button>
 
       <button class="btn btn--gold btn--block" id="adminSubmitBtn" type="submit">افزودن تئاتر و شروع رزرو</button>
+      <button class="btn btn--ghost btn--small" id="adminCancelEditBtn" type="button" hidden>انصراف از ویرایش</button>
       <p class="form-note" id="adminNote"></p>
     </form>
   </section>

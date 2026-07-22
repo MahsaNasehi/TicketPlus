@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ticketplus.catalog import EventCatalog, InvalidEvent
+from ticketplus.catalog import EventCatalog, EventNotFound, InvalidEvent
 
 
 VALID_ROWS = [{"label": "A", "seats": 5, "priceMinor": 200_000}]
@@ -65,6 +65,36 @@ class EventCatalogTests(unittest.TestCase):
         self.assertEqual(event["venue"], "Venue")
         self.assertEqual(event["rows"], VALID_ROWS)
         self.assertEqual(catalog.list(), [event])
+
+    def test_update_event_overwrites_fields_and_keeps_id(self):
+        catalog = EventCatalog(self.db_path, seed_defaults=False)
+        original = catalog.create_event("Title", "Venue", "Sat", VALID_ROWS)
+        new_rows = [{"label": "A", "seats": 9, "priceMinor": 250_000}]
+        updated = catalog.update_event(original["id"], "New Title", "New Venue", "Sun", new_rows)
+        self.assertEqual(updated["id"], original["id"])
+        self.assertEqual(updated["title"], "New Title")
+        self.assertEqual(updated["venue"], "New Venue")
+        self.assertEqual(updated["dateLabel"], "Sun")
+        self.assertEqual(updated["rows"], new_rows)
+        self.assertEqual(catalog.get(original["id"]), updated)
+
+    def test_update_event_raises_when_id_does_not_exist(self):
+        catalog = EventCatalog(self.db_path, seed_defaults=False)
+        with self.assertRaises(EventNotFound):
+            catalog.update_event("missing-id", "Title", "Venue", "Sat", VALID_ROWS)
+
+    def test_update_event_validates_like_create(self):
+        catalog = EventCatalog(self.db_path, seed_defaults=False)
+        original = catalog.create_event("Title", "Venue", "Sat", VALID_ROWS)
+        with self.assertRaises(InvalidEvent):
+            catalog.update_event(original["id"], "", "Venue", "Sat", VALID_ROWS)
+        with self.assertRaises(InvalidEvent):
+            catalog.update_event(
+                original["id"], "Title", "Venue", "Sat",
+                [{"label": "A", "seats": 5, "priceMinor": 100_000}],
+            )
+        # a failed update must not have mutated the stored event
+        self.assertEqual(catalog.get(original["id"]), original)
 
 
 if __name__ == "__main__":

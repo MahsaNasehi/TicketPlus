@@ -69,6 +69,10 @@ class InvalidEvent(Exception):
     """Raised when event data fails validation (e.g. a row's price is too low)."""
 
 
+class EventNotFound(Exception):
+    """Raised when an event id does not exist in the catalog."""
+
+
 class EventCatalog:
     def __init__(self, database: str | Path, *, seed_defaults: bool = True) -> None:
         self.database = str(database)
@@ -109,9 +113,8 @@ class EventCatalog:
             cleaned.append({"label": label, "seats": seats, "priceMinor": price_minor})
         return cleaned
 
-    def create_event(
-        self, title: str, venue: str, date_label: str, rows: list[dict[str, object]]
-    ) -> dict[str, object]:
+    @staticmethod
+    def _validate_fields(title: str, venue: str, date_label: str) -> tuple[str, str, str]:
         title = (title or "").strip()
         venue = (venue or "").strip()
         date_label = (date_label or "").strip()
@@ -121,6 +124,12 @@ class EventCatalog:
             raise InvalidEvent("venue is required")
         if not date_label:
             raise InvalidEvent("date label is required")
+        return title, venue, date_label
+
+    def create_event(
+        self, title: str, venue: str, date_label: str, rows: list[dict[str, object]]
+    ) -> dict[str, object]:
+        title, venue, date_label = self._validate_fields(title, venue, date_label)
         cleaned_rows = self._validate_rows(rows)
 
         event_id = str(uuid4())
@@ -133,11 +142,31 @@ class EventCatalog:
             )
         return self.get(event_id)
 
+    def update_event(
+        self, event_id: str, title: str, venue: str, date_label: str, rows: list[dict[str, object]]
+    ) -> dict[str, object]:
+        """Overwrite an existing event's fields in place (id and createdAt are kept)."""
+        with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT id FROM events WHERE id = ?", (event_id,)
+            ).fetchone()
+            if not existing:
+                raise EventNotFound(f"event {event_id} not found")
+
+            title, venue, date_label = self._validate_fields(title, venue, date_label)
+            cleaned_rows = self._validate_rows(rows)
+
+            connection.execute(
+                "UPDATE events SET title = ?, venue = ?, date_label = ?, rows_json = ? WHERE id = ?",
+                (title, venue, date_label, json.dumps(cleaned_rows), event_id),
+            )
+        return self.get(event_id)
+
     def get(self, event_id: str) -> dict[str, object]:
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
         if not row:
-            raise InvalidEvent(f"event {event_id} not found")
+            raise EventNotFound(f"event {event_id} not found")
         return {
             "id": row["id"],
             "title": row["title"],
